@@ -1,29 +1,39 @@
 import pygame
 import random
 import math
-import sys
-
+from Particle import ParticleManager
 
 class StarManager:
     def __init__(self, max_particles, screen, width, height):
         self.max_particles = max_particles
         self.stars = []  # Lista para las estrellas
         self.screen = screen
-        self.width = width
-        self.height = height
+        self.width = int(width)
+        self.height = int(height)
         self.gravity_centers = []
-        self.gravity_strength = 25  # Fuerza de gravedad (ajusta según sea necesario)
-        self.gravity_color = (255, 0, 0)  # Color de la bola de gravedad
-        self.gravity_color_distance = (255, 0, 0,0.5)  # Color de la bola de gravedad
+        self.gravity_strength = 40  # Fuerza de gravedad (ajusta según sea necesario)
         self.star_speed = 7  # Velocidad constante de las estrellas
+        self.particle_manager = ParticleManager(max_particles, screen, width, height)
 
-        # Add 3 random gravity centers
-        for _ in range(5):
+        # Add 3 random gravity centers with different sizes
+        for _ in range(3):
             x = random.randint(0, self.width)
             y = random.randint(0, self.height)
-            distance = random.randint(100, 300)
-            self.add_gravity_center(x, y, distance)
+            center_size = random.randint(20, 40)  # Cambia estos valores para ajustar el tamaño
+            size = random.randint(center_size + 50, center_size + 150)  # Cambia estos valores para ajustar el tamaño
+            dx = random.uniform(-1, 1)
+            dy = random.uniform(-1, 1)
+            self.add_gravity_center(x, y, size, center_size, dx, dy)
+    
+    def update(self, audio_data, volume):
+        self.update_stars()
+        self.update_gravity_centers()
+        self.particle_manager.update_scale(audio_data, volume)
+        self.particle_manager.update_particles()
         
+        self.draw_shooting_stars()
+        self.particle_manager.move_particles(audio_data, volume)
+    
     def create_star(self):
         margin = 10
         side = random.randint(0, 3)  # Lado de la pantalla (0-3: arriba, derecha, abajo, izquierda)
@@ -52,18 +62,37 @@ class StarManager:
         size = random.randint(1, 15)
 
         return {'x': x, 'y': y, 'speed': speed, 'brightness': brightness, 'trail': [], 'size': size, 'angle': angle}
-    
-    def add_gravity_center(self, x, y, distance):
-        self.gravity_centers.append((x, y, distance))
+
+    def add_gravity_center(self, x, y, size, size_center, dx, dy):
+        self.gravity_centers.append({'x': x, 'y': y, 'size': size, 'size_center': size_center, 'dx': dx, 'dy': dy})
+
+    def update_gravity_centers(self):
+        for center in self.gravity_centers:
+            x, y, size, dx, dy = center['x'], center['y'], center['size'], center['dx'], center['dy']
+
+            # Actualiza la posición de los centros de gravedad
+            x += dx
+            y += dy
+
+            # Rebote en los bordes de la pantalla
+            if x < 0 or x > self.width:
+                dx *= -1
+            if y < 0 or y > self.height:
+                dy *= -1
+
+            center['x'] = x
+            center['y'] = y
+            center['dx'] = dx
+            center['dy'] = dy
 
     def change_star_direction(self, star, new_angle):
         star['angle'] = new_angle
 
     def draw_gravity_centers(self):
         for center in self.gravity_centers:
-            x, y, distance = center
-            pygame.draw.circle(self.screen, self.gravity_color, (x, y), 10)  # Ajusta el tamaño y color
-            pygame.draw.circle(self.screen, self.gravity_color_distance, (x, y), distance, 1)  # Ajusta el color
+            x, y, size = center['x'], center['y'], center['size']
+            pygame.draw.circle(self.screen, self.tone_to_color(), (int(x), int(y)), center['size_center'])
+            pygame.draw.circle(self.screen, self.tone_to_color(), (int(x), int(y)), size, 1)
 
     def draw_shooting_stars(self):
         new_stars = []  # Lista para almacenar las estrellas que permanecen en la pantalla
@@ -101,11 +130,11 @@ class StarManager:
 
             # Aplica la gravedad si hay puntos de gravedad definidos
             for center in self.gravity_centers:
-                gx, gy, distance = center
+                gx, gy, size = center['x'], center['y'], center['size']
                 dx_center = gx - x
                 dy_center = gy - y
                 distance_center = math.sqrt(dx_center ** 2 + dy_center ** 2)
-                
+
                 # Evitar la división por cero
                 if distance_center > 0:
                     gravity_direction = math.atan2(dy_center, dx_center)
@@ -117,14 +146,12 @@ class StarManager:
             star['y'] += dy
             self.change_star_direction(star, math.atan2(dy, dx))
 
-            
             # Si la estrella sigue en la pantalla, guárdala en la lista de estrellas que permanecen
             if 0 <= x <= self.width and 0 <= y <= self.height:
                 new_stars.append(star)
 
         # Reemplaza la lista de estrellas con las que permanecen en la pantalla
         self.stars[:] = new_stars
-
 
     def update_stars(self):
         if len(self.stars) < self.max_particles:  # Limita la cantidad de estrellas

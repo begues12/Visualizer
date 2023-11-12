@@ -94,19 +94,17 @@ class Visualizer:
         self.fire_sign_rect = self.fire_sign.get_rect()
 
          # All drawing functions or classes
-        # self.drawing_functions = [
-        #                 self.spectrum_wave,
-        #                 self.rotation_circles,
-        #                 self.background_color,
-        #                 self.bouncy_image,
-        #                 self.spectrum_semicircles, 
-        #                 self.circular_wave, 
-        #                 self.frequency_spectrum,
-        #                 self.shooting_stars,
-        #                 ]
-        
-        self.drawing_functions = [self.shooting_stars]
-        
+        self.drawing_functions = [
+                        self.spectrum_wave,
+                        self.rotation_circles,
+                        self.background_color,
+                        self.bouncy_image,
+                        self.spectrum_semicircles, 
+                        self.circular_wave, 
+                        self.frequency_spectrum,
+                        self.shooting_stars,
+                        ]
+                
         self.chargeParticles()
         self.current_function = random.choice(self.drawing_functions)
     
@@ -134,7 +132,7 @@ class Visualizer:
             self.draw_center_image(audio_data)
 
             # Particles
-            self.particle_manager.move_particles(audio_data, self.volume)
+            self.particle_manager.move_particles(audio_data, self.volume, self.clock.get_time())
             self.particle_manager.update_particles()
             self.particle_manager.update_scale(audio_data, self.volume)
             
@@ -212,6 +210,7 @@ class Visualizer:
     def shooting_stars(self, audio_data):
         self.star_manager.draw_shooting_stars()
         self.star_manager.update_stars()
+        self.star_manager.update_gravity_centers()
     
     def frequency_spectrum(self, audio_data):
         num_bands = 10
