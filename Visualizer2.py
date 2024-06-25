@@ -9,6 +9,8 @@ import pygame.freetype
 import psutil
 from Particle import ParticleManager
 from StarManager import StarManager
+from panel_control import ControlPanel
+from threading import Thread
 
 class Visualizer:
     
@@ -47,13 +49,13 @@ class Visualizer:
     image_size = 1
     image_current_scale = 1
     current_function = None
-    change_mode = "random"
+    change_mode = "static"
     last_time = 0
     effect_duration = 10000  # Duración de cada efecto en milisegundos
     last_function_change_time = 0
     
     # Image variables
-    image_path = os.path.join(os.path.dirname(__file__), "logo.png")
+    image_path = os.path.join(os.path.dirname(__file__), "logo2.png")
     fire_sign = None
     fire_sign_rect = None
 
@@ -67,9 +69,11 @@ class Visualizer:
         pygame.font.init()  # Initialize the pygame font module
         pygame.freetype.init()  # Initialize the pygame FreeType library
         pygame.display.set_caption("Audio Visualizer")
+        pygame.display.set_icon(pygame.image.load(self.image_path))
         self.clock = pygame.time.Clock()
         self.screen_info = pygame.display.Info()
 
+        actual_resolution = (self.screen_info.current_w, self.screen_info.current_h)
               
         if self.fullscreen:
             self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
@@ -77,7 +81,7 @@ class Visualizer:
             self.screen = pygame.display.set_mode(self.actual_resolution)
             
         
-        self.actual_resolution = (640, 480)
+        self.actual_resolution = (self.screen.get_width(), self.screen.get_height())
         self.center_x = self.actual_resolution[0] / 2
         self.center_y = self.actual_resolution[1] / 2
 
@@ -90,7 +94,7 @@ class Visualizer:
         
         # Carga de la imagen
         self.fire_sign = pygame.image.load(self.image_path).convert_alpha()
-        self.fire_sign = pygame.transform.scale(self.fire_sign, (246, 205))
+        self.fire_sign = pygame.transform.scale(self.fire_sign, (246, 246))
         self.fire_sign_rect = self.fire_sign.get_rect()
 
          # All drawing functions or classes
@@ -104,10 +108,12 @@ class Visualizer:
                         self.frequency_spectrum,
                         self.shooting_stars,
                         ]
-                
+        
+        self.active_effects = list(self.drawing_functions)
+
         self.chargeParticles()
-        self.current_function = random.choice(self.drawing_functions)
-    
+        self.current_function = random.choice(self.active_effects)        
+        
     def chargeParticles(self):
         self.particle_manager = ParticleManager(self.max_particles, self.screen, self.actual_resolution[0], self.actual_resolution[1])
         self.star_manager = StarManager(10, self.screen, self.actual_resolution[0], self.actual_resolution[1])
@@ -134,7 +140,7 @@ class Visualizer:
             # Particles
             self.particle_manager.move_particles(audio_data, self.volume, self.clock.get_time())
             self.particle_manager.update_particles()
-            self.particle_manager.update_scale(audio_data, self.volume)
+            # self.particle_manager.update_scale(audio_data, self.volume)
             
             # Dibuja el texto de depuración en la esquina inferior derecha si el modo de depuración está activado
             if self.debug_mode:
@@ -147,6 +153,23 @@ class Visualizer:
         self.p.terminate()
         pygame.quit()
 
+    def load_image(self, width, height):
+        self.fire_sign = pygame.image.load(self.image_path).convert_alpha()
+        self.fire_sign = pygame.transform.scale(self.fire_sign, (width, height))
+        self.fire_sign_rect = self.fire_sign.get_rect()
+
+    def change_resolution(self, width, height):
+        self.actual_resolution = (width, height)
+        self.onScreenChange()
+        
+    def toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+        if self.fullscreen:
+            self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
+        else:
+            self.screen = pygame.display.set_mode(self.actual_resolution)
+        self.onScreenChange()
+    
     def draw_center_image(self, audio_data):
 
         scale_change_speed = 0.5  # Ajusta la velocidad según desees
@@ -187,6 +210,16 @@ class Visualizer:
         for i in range(1, len(points)):
             pygame.draw.line(self.screen, color, points[i - 1], points[i], line_width)
     
+    def update_active_effects(self, active_effect_names):
+        self.active_effects = [effect for effect in self.drawing_functions if effect.__name__ in active_effect_names]
+        
+        if not self.active_effects:
+            self.active_effects = [self.idle_effect]  # Suponiendo que existe un efecto de reposo
+        
+    def idle_effect(self, audio_data):
+        self.screen.fill((0, 0, 0))  # Simplemente rellena la pantalla de negro o muestra un mensaje.
+        self.font.render_to(self.screen, (10, 10), "No active effects.", (255, 255, 255))
+        
     def spectrum_semicircles(self, audio_data):
         
         num_semicircles = 2
@@ -256,7 +289,7 @@ class Visualizer:
             color = (0, 0, 0)  # Color de fondo predeterminado cuando el volumen no es alto
 
         self.screen.fill(color)
-    
+        
     def bouncy_image(self, audio_data):
         num_logos = 10
         if not hasattr(self, "logos"):
@@ -302,12 +335,11 @@ class Visualizer:
                 
     def next_effect(self):
         if self.change_mode == "random":
-            return random.choice(self.drawing_functions)
+            return random.choice(self.active_effects)
         else:
-            # Calcula el índice de la función actual y recoge la siguiente función o la primera si es la última
-            current_function_index = self.drawing_functions.index(self.current_function)
-            next_function_index = current_function_index + 1 if current_function_index < len(self.drawing_functions) - 1 else 0
-            return self.drawing_functions[next_function_index]
+            current_function_index = self.active_effects.index(self.current_function)
+            next_function_index = current_function_index + 1 if current_function_index < len(self.active_effects) - 1 else 0
+            return self.active_effects[next_function_index]
          
     def debug(self):
         current_time = pygame.time.get_ticks()
@@ -501,5 +533,13 @@ class Visualizer:
         except:
             return 0
         
-visualizer = Visualizer()
-visualizer.start()
+def run_visualizer(control_panel):
+    visualizer = control_panel.visualizer
+    visualizer.start()
+        
+if __name__ == "__main__":
+    control_panel = ControlPanel(Visualizer())
+    visualizer_thread = Thread(target=run_visualizer, args=(control_panel,))
+    visualizer_thread.start()
+    control_panel.root.mainloop()
+    
