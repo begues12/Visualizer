@@ -4,7 +4,6 @@ import pyaudio
 import os
 import random
 import math
-import colorsys
 import pygame.freetype
 import psutil
 from Managers.particle_manager import ParticleManager
@@ -16,6 +15,7 @@ from Effects.center_image import CenterImage
 from Effects.spectrum_wave import SpectrumWave
 from Effects.spectrum_semicircles import SpectrumSemicircles
 from Effects.shooting_starts import ShootingStars
+from Effects.frequency_spectrum import FrequencySpectrum
 
 class Visualizer:
     
@@ -68,7 +68,7 @@ class Visualizer:
         self.screen_info = pygame.display.Info()
 
         actual_resolution = (self.screen_info.current_w, self.screen_info.current_h)
-              
+       
         if self.fullscreen:
             self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
         else:
@@ -76,13 +76,15 @@ class Visualizer:
             
         
         self.actual_resolution = (self.screen.get_width(), self.screen.get_height())
+       
+        self.particle_manager = ParticleManager(self.max_particles, self.screen, self.actual_resolution[0], self.actual_resolution[1])
+       
         self.center_x = self.actual_resolution[0] / 2
         self.center_y = self.actual_resolution[1] / 2
 
         self.time_to_change_effect = 10 * self.fps
         self.particle_size = self.actual_resolution[0] / 100
         self.particle_speed = self.actual_resolution[0] / 100
-        
         #Carga fuente
         self.font =  pygame.freetype.Font(None, 14)
         
@@ -94,6 +96,7 @@ class Visualizer:
                         SpectrumWave(self),
                         SpectrumSemicircles(self),
                         ShootingStars(self),
+                        FrequencySpectrum(self),
                         # self.background_color,
                         # self.bouncy_image,
                         # self.spectrum_semicircles, 
@@ -147,6 +150,9 @@ class Visualizer:
         self.p.terminate()
         pygame.quit()
     
+    def get_screen(self):
+        return self.screen
+    
     def get_audio_manager(self):
         return self.audioManager
         
@@ -178,24 +184,7 @@ class Visualizer:
     def idle_effect(self, audio_data):
         self.screen.fill((0, 0, 0))  # Simplemente rellena la pantalla de negro o muestra un mensaje.
         self.font.render_to(self.screen, (10, 10), "No active effects.", (255, 255, 255))
-        
-
-    def shooting_stars(self, audio_data):
-        self.star_manager.draw_shooting_stars()
-        self.star_manager.update_stars()
-        self.star_manager.update_gravity_centers()
-    
-    def frequency_spectrum(self, audio_data):
-        num_bands = 10
-        band_height = self.actual_resolution[1] // num_bands
-
-        for i in reversed(range(num_bands)):  # Invierte el orden del bucle
-            band_data = audio_data[i * len(audio_data) // num_bands:(i + 1) * len(audio_data) // num_bands]
-            color = self.Rcolor()
-            y = self.actual_resolution[1] - (i + 1) * band_height  # Ajusta la coordenada 'y'
-            rect = pygame.Rect(0, y, int(self.volume / 32768 * self.actual_resolution[0]), band_height)
-            pygame.draw.rect(self.screen, color, rect)
-    
+            
     def rotation_circles(self, audio_data):
         center_x = self.actual_resolution[0] // 2
         center_y = self.actual_resolution[1] // 2

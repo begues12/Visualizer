@@ -1,9 +1,15 @@
 from StarManager import StarManager
 import pygame
+from Effects.effect import Effect
 
-class ShootingStars:
+class ShootingStars(Effect):
     
     def __init__(self, visualizer):
+        super().__init__(
+            "Shooting Stars",
+            visualizer,
+            visualizer.get_particle_manager()
+            )
         self.visualizer = visualizer
         self.star_manager = StarManager(
             self.visualizer.get_particle_manager().get_max_particles(),

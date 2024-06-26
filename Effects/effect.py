@@ -8,7 +8,14 @@ class Effect:
     
     def save_config(self, config):
         self.config = config
-        
+    
+    def set_index_color(self, n):
+        # ZeroDivisionError: integer division or modulo by zero
+        if n == 0:
+            n = 1
+            
+        self.color = (255 // n + 1, 255 // n + 1, 255 // n  + 1)
+    
     def get_config(self):
         return self.config
     
