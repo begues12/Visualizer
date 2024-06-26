@@ -2,6 +2,7 @@ import os
 import pygame
 from tkinter import Tk, Listbox, Button, IntVar, DoubleVar, Frame, Label, SINGLE, END, OptionMenu, StringVar, Entry, Checkbutton, BooleanVar, Canvas, Scrollbar, VERTICAL, LEFT
 from tkinter import ttk
+from control_panel.images import ControlPanelImages
 
 class ControlPanel:
     def __init__(self, visualizer):
@@ -35,147 +36,14 @@ class ControlPanel:
         
         tab_control.pack(expand=1, fill="both")
 
-        self.setup_images_tab(tab_images)
+        self.ControlPanelImages().setup_images_tab(tab_images)
         self.setup_effects_tab(tab_effects)
         self.setup_particles_tab(tab_particles)
         self.setup_settings_tab(tab_settings)
         self.setup_debug_tab(tab_debug)
 
         self.root.geometry("800x600")
-
-    def setup_images_tab(self, parent):
-        image_frame = ttk.Frame(parent)
-        image_frame.pack(padx=10, pady=10, fill='both', expand=True)
-
-        label = ttk.Label(image_frame, text="Available Images")
-        label.grid(row=0, column=0, columnspan=2, pady=5, padx=5)  # Extender la etiqueta a dos columnas
-
-        self.image_listbox = Listbox(image_frame, selectmode='single', width=50)
-        self.image_listbox.bind("<<ListboxSelect>>", lambda event: self.load_image_size_entries())
-        self.image_listbox.grid(row=1, column=0, columnspan=2, pady=5, padx=5)  # Extender el Listbox a dos columnas
-
-        self.load_images()
-
-        # Entrada para la anchura de la imagen
-        ttk.Label(image_frame, text="Width:").grid(row=2, column=0, pady=5, padx=5)
-        self.image_width_entry = Entry(image_frame)
-        self.image_width_entry.grid(row=2, column=1, pady=5, padx=5)
-
-        # Entrada para la altura de la imagen
-        ttk.Label(image_frame, text="Height:").grid(row=3, column=0, pady=5, padx=5)
-        self.image_height_entry = Entry(image_frame)
-        self.image_height_entry.grid(row=3, column=1, pady=5, padx=5)
-
-        # Entrada para el factor de escala
-        ttk.Label(image_frame, text="Scale Factor:").grid(row=4, column=0, pady=5, padx=5)
-        self.scale_factor_entry = Entry(image_frame)
-        self.scale_factor_entry.insert(0, "1.0")
-        self.scale_factor_entry.grid(row=4, column=1, pady=5, padx=5)
-
-        # Botón para cambiar la imagen seleccionada
-        button = ttk.Button(image_frame, text="Change Image", command=self.change_image)
-        button.grid(row=5, column=0, columnspan=2, pady=5, padx=5)  # Extender el botón a dos columnas
-
-
-    def setup_effects_tab(self, parent):
-        # Contenido de la pestaña de efectos
-        effects_frame = ttk.Frame(parent)
-        effects_frame.pack(padx=10, pady=10, fill='both', expand=True)
-
-        label = ttk.Label(effects_frame, text="Effects Control")
-        label.grid(row=0, column=0, columnspan=2, pady=5, padx=5)
-
-        for effect_name, var in self.effects_status.items():
-            checkbutton = ttk.Checkbutton(effects_frame, text=effect_name, variable=var, onvalue=True, offvalue=False, command=self.update_effect_status)
-            checkbutton.grid(sticky='w', row=list(self.effects_status.keys()).index(effect_name) + 1, column=0, columnspan=2, pady=5, padx=5)
-
-        label_order = ttk.Label(effects_frame, text="Effects Order:")
-        label_order.grid(row=len(self.effects_status) + 1, column=0, pady=5, padx=5)
-
-        option_menu = ttk.OptionMenu(effects_frame, self.order_var, "static", "static", "random", "sequential", command=self.update_order)
-        option_menu.grid(row=len(self.effects_status) + 1, column=1, pady=5, padx=5)
-        
-        next_button = ttk.Button(effects_frame, text="Apply Changes", command=self.apply_changes)
-        next_button.grid(row=len(self.effects_status) + 2, column=0, columnspan=2, pady=5, padx=5)
-        
-        prev_button = ttk.Button(effects_frame, text="Toggle Debug Mode", command=self.toggle_debug_mode)
-        prev_button.grid(row=len(self.effects_status) + 3, column=0, columnspan=2, pady=5, padx=5)
-        
-        
-    def setup_particles_tab(self, parent):
-        particle_frame = ttk.Frame(parent)
-        particle_frame.pack(padx=10, pady=10, fill='both', expand=True)
-
-        # Control deslizante para la cantidad de partículas
-        ttk.Label(particle_frame, text="Max Particles:").grid(row=0, column=0, pady=5, padx=5)
-        self.max_particles_var = IntVar(value=self.visualizer.max_particles)
-        max_particles_scale = ttk.Entry(particle_frame, textvariable=self.max_particles_var)
-        max_particles_scale.bind("<Return>", lambda event: self.update_max_particles(max_particles_scale.get()))
-        max_particles_scale.grid(row=0, column=1, pady=5, padx=5)
-
-        # Control deslizante para la velocidad de las partículas
-        ttk.Label(particle_frame, text="Particle Speed:").grid(row=1, column=0, pady=5, padx=5)
-        self.particle_speed_var = DoubleVar(value=self.visualizer.particle_speed)
-        particle_speed_scale = ttk.Scale(particle_frame, from_=0.1, to=10.0, orient='horizontal', variable=self.particle_speed_var, command=self.update_particle_speed)
-        particle_speed_scale.grid(row=1, column=1, pady=5, padx=5)
-
-        # Control deslizante para el tamaño de las partículas
-        ttk.Label(particle_frame, text="Particle Size:").grid(row=2, column=0, pady=5, padx=5)
-        self.particle_size_var = DoubleVar(value=self.visualizer.particle_size)
-        particle_size_scale = ttk.Scale(particle_frame, from_=1, to=100, orient='horizontal', variable=self.particle_size_var, command=self.update_particle_size)
-        particle_size_scale.grid(row=2, column=1, pady=5, padx=5)
-
-    def setup_debug_tab(self, parent):
-        self.debug_labels = {}
-        debug_frame = ttk.Frame(parent)
-        debug_frame.pack(padx=10, pady=10, fill='both', expand=True)
-        
-        # Crear etiquetas para cada dato de debug
-        row = 0
-        for key in ["FPS", "current_function", "change_mode", "time_left", "num_particles", "max_amplitude", "cpu_usage", "cpu_temp", "sensitivity", "volume", "resolution"]:
-            label = ttk.Label(debug_frame, text=f"{key}:")
-            label.grid(row=row, column=0, pady=5, padx=5, sticky='w')
-            value_label = ttk.Label(debug_frame, text="")
-            value_label.grid(row=row, column=1, pady=5, padx=5, sticky='w')
-            self.debug_labels[key] = value_label
-            row += 1
-
-
-    def setup_settings_tab(self, parent):
-        # Contenido de la pestaña de ajustes
-        settings_frame = ttk.Frame(parent)
-        settings_frame.pack(padx=10, pady=10, fill='both', expand=True)
-        
-        ttk.Label(settings_frame, text="Sound Sensitivity:").grid(row=0, column=0, pady=5, padx=5)
-        self.sensitivity_var = DoubleVar(value=self.audio_manager.sensitivity)  # Inicia con el valor actual de sensibilidad
-        sensitivity_scale = ttk.Scale(settings_frame, from_=0.0, to=5.0, orient='horizontal', variable=self.sensitivity_var, command=self.update_sensitivity)
-        sensitivity_scale.grid(row=0, column=1, pady=5, padx=5)
-        
-        # Asegúrate de que resolution_var es una StringVar y está correctamente inicializada
-        self.resolution_var = StringVar(value=f"{self.visualizer.actual_resolution[0]}x{self.visualizer.actual_resolution[1]}")
-        resolutions = [f"{res[0]}x{res[1]}" for res in self.visualizer.resolutions]
-        
-        # Asegúrate de pasar self.resolution_var al OptionMenu
-        ttk.Label(settings_frame, text="Resolution:").grid(row=1, column=0, pady=5, padx=5)
-        resolution_menu = ttk.OptionMenu(settings_frame, self.resolution_var, self.resolution_var.get(), *resolutions, command=self.change_resolution)
-        resolution_menu.grid(row=1, column=1, pady=5, padx=5)
-
-        ttk.Label(settings_frame, text="Screen:").grid(row=2, column=0, pady=5, padx=5)
-        screen_options = [f"Screen {i+1}" for i in range(pygame.display.get_num_displays())]
-        self.screen_var = StringVar(value="Screen 1")
-        screen_menu = ttk.OptionMenu(settings_frame, self.screen_var, self.screen_var.get(), *screen_options, command=self.change_screen)
-        screen_menu.grid(row=2, column=1, pady=5, padx=5)
-
-        ttk.Button(settings_frame, text="Toggle Fullscreen", command=self.toggle_fullscreen).grid(row=3, column=0, columnspan=2, pady=5, padx=5)
-
-        
-    def load_images(self):
-        image_folder = os.path.join(os.path.dirname(__file__), "images")
-        if not os.path.exists(image_folder):
-            os.makedirs(image_folder)
-        for file_name in os.listdir(image_folder):
-            if file_name.lower().endswith(('.png', '.jpg', '.jpeg')):
-                self.image_listbox.insert(END, file_name)
+    
 
     def change_image(self):
         selected_index = self.last_selected_image
