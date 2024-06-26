@@ -82,5 +82,8 @@ class ParticleManager:
         # Interpola suavemente entre el tamaño actual y el tamaño objetivo
         self.current_scale += (target_scale - self.current_scale) * scale_change_speed
 
+    def get_max_particles(self):
+        return self.max_particles
+    
     def getNumParticles(self):
         return len(self.particles)

@@ -13,12 +13,16 @@ class SpectrumSemicircles(Effect):
             )
         self.audio_manager = visualizer.get_audio_manager()
         self.config = {
-            "num_semicircles": 2
+            "num_semicircles": 2,
+            "max_radius": 150,
+            "min_radius": 50,
+            "arc_width": 10,
+            
         }
         
     def draw(self, audio_data):
         
-        num_semicircles = 2
+        num_semicircles = self.config["num_semicircles"]
 
         for i in range(num_semicircles):
 

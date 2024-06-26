@@ -24,17 +24,22 @@ class ControlPanel:
         tab_images = ttk.Frame(tab_control)
         tab_effects = ttk.Frame(tab_control)
         tab_particles = ttk.Frame(tab_control)  
+        tab_debug = ttk.Frame(tab_control)
         tab_settings = ttk.Frame(tab_control)
+        
         tab_control.add(tab_images, text='Images')
         tab_control.add(tab_effects, text='Effects')
         tab_control.add(tab_particles, text='Particles')  # Añadir la pestaña de partículas
+        tab_control.add(tab_debug, text='Debug')
         tab_control.add(tab_settings, text='Settings')
+        
         tab_control.pack(expand=1, fill="both")
 
         self.setup_images_tab(tab_images)
         self.setup_effects_tab(tab_effects)
         self.setup_particles_tab(tab_particles)
         self.setup_settings_tab(tab_settings)
+        self.setup_debug_tab(tab_debug)
 
         self.root.geometry("800x600")
 
@@ -119,6 +124,21 @@ class ControlPanel:
         self.particle_size_var = DoubleVar(value=self.visualizer.particle_size)
         particle_size_scale = ttk.Scale(particle_frame, from_=1, to=100, orient='horizontal', variable=self.particle_size_var, command=self.update_particle_size)
         particle_size_scale.grid(row=2, column=1, pady=5, padx=5)
+
+    def setup_debug_tab(self, parent):
+        self.debug_labels = {}
+        debug_frame = ttk.Frame(parent)
+        debug_frame.pack(padx=10, pady=10, fill='both', expand=True)
+        
+        # Crear etiquetas para cada dato de debug
+        row = 0
+        for key in ["FPS", "current_function", "change_mode", "time_left", "num_particles", "max_amplitude", "cpu_usage", "cpu_temp", "sensitivity", "volume", "resolution"]:
+            label = ttk.Label(debug_frame, text=f"{key}:")
+            label.grid(row=row, column=0, pady=5, padx=5, sticky='w')
+            value_label = ttk.Label(debug_frame, text="")
+            value_label.grid(row=row, column=1, pady=5, padx=5, sticky='w')
+            self.debug_labels[key] = value_label
+            row += 1
 
 
     def setup_settings_tab(self, parent):
@@ -225,6 +245,17 @@ class ControlPanel:
     def update_particle_size(self, new_value):
         self.visualizer.particle_manager.particle_size = float(new_value)
         print(f"Particle size updated to {new_value}")
+
+    def update_debug_tab(self):
+        debug_info = self.visualizer.debug_info()
+        for key, value in debug_info.items():
+            self.debug_labels[key].config(text=str(value))
+
+    def update(self):
+        self.update_debug_tab()
+        self.root.update_idletasks()
+        self.root.update()
+        self.root.after(1000, self.update)
 
     
     def apply_changes(self):

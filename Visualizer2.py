@@ -15,6 +15,7 @@ from Managers.audio_manager import AudioManager
 from Effects.center_image import CenterImage
 from Effects.spectrum_wave import SpectrumWave
 from Effects.spectrum_semicircles import SpectrumSemicircles
+from Effects.shooting_starts import ShootingStars
 
 class Visualizer:
     
@@ -92,6 +93,7 @@ class Visualizer:
         self.drawing_functions = [
                         SpectrumWave(self),
                         SpectrumSemicircles(self),
+                        ShootingStars(self),
                         # self.background_color,
                         # self.bouncy_image,
                         # self.spectrum_semicircles, 
@@ -111,14 +113,15 @@ class Visualizer:
         
     def start(self):
         while self.running:
-            
-            self.hotkeys()
-                        
+                                    
             audio_data = self.audioManager.getAudioData()
             self.volume = self.audioManager.getVolume()
             
             self.screen.fill((0,0,0))
-            self.current_function.draw(audio_data)  # Ejecuta la función actual
+            
+            # If has draw function, execute it
+            if self.current_function and hasattr(self.current_function, 'draw'):
+                self.current_function.draw(audio_data)  # Ejecuta la función actual
             
             if pygame.time.get_ticks() - self.last_function_change_time >= self.effect_duration and self.change_mode != "static":
                 self.current_function = self.next_effect()
@@ -278,175 +281,39 @@ class Visualizer:
             next_function_index = current_function_index + 1 if current_function_index < len(self.active_effects) - 1 else 0
             return self.active_effects[next_function_index]
          
-    def debug(self):
+    def debug_info(self):
         current_time = pygame.time.get_ticks()
-        
         elapsed_time = current_time - self.last_time
         if elapsed_time > 0:
             current_fps = int(1000 / elapsed_time)
         
         self.last_time = current_time
+        current_function_name = self.current_function.get_effect_name() if self.current_function else "None"
 
-        current_fps = int(1000 / elapsed_time)
-        
-        current_function_name = self.current_function.__name__
-        
-        # Dibuja el texto de depuración en la esquina inferior derecha
-        fps_text = f"FPS: {current_fps}"
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 40), fps_text, self.font_color)
+        debug_data = {
+            "FPS": current_fps,
+            "current_function": current_function_name,
+            "change_mode": self.change_mode,
+            "time_left": int((self.effect_duration - (current_time - self.last_function_change_time)) / 1000),
+            "num_particles": self.particle_manager.getNumParticles(),
+            "max_amplitude": "NaN",
+            "cpu_usage": psutil.cpu_percent(),
+            "cpu_temp": self.getCPUTemp(),
+            "sensitivity": self.audioManager.sensitivity,
+            "volume": self.get_audio_manager().getVolume(),
+            "resolution": f"{self.actual_resolution[0]}x{self.actual_resolution[1]}"
+        }
 
-        # Dibuja las resoluciones disponibles y la resolución actual en la esquina inferior izquierda
-        current_resolution_text = f"Resolución actual: {self.actual_resolution[0]}x{self.actual_resolution[1]}"
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 70), current_resolution_text, self.font_color)
-        
-        # Dibuja el nombre de la función actual en la esquina superior izquierda
-        current_function_text = f"Función actual: {current_function_name}"
-        self.font.render_to(self.screen, (10, 10), current_function_text, self.font_color)
-        
-        # Dibuja el modo de cambio de efecto actual en la esquina superior derecha
-        change_mode_text = f"Modo de cambio de efecto: {self.change_mode}"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, 10), change_mode_text, self.font_color)
-        
-        #Dibuja el tiempo que queda para que cambie el siguiente efecto
-        time_left_text = f"Tiempo restante: {int((self.effect_duration - (current_time - self.last_function_change_time)) / 1000)}s"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, 40), time_left_text, self.font_color)
-        
-        # Dibuja el número de partículas en la esquina inferior izquierda
-        num_particles_text = f"Número de partículas: "
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 100), num_particles_text + str(self.particle_manager.getNumParticles()) , self.font_color)
-        
-        # Dibuja la amplitud máxima en la esquina inferior izquierda
-        max_amplitude_text = f"Amplitud máxima: NaN"
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 130), max_amplitude_text, self.font_color)
-        
-        #Dibuja el uso de la CPU y la temperatura en la esquina inferior izquierda
-        cpu_usage_text = f"Uso de la CPU: {psutil.cpu_percent()}%"
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 160), cpu_usage_text, self.font_color)
-        
-        cpu_temp_text = f"Temperatura de la CPU: "
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 190), cpu_temp_text + str(self.getCPUTemp()) + "ºC", self.font_color)
-        
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 220), "Sensibilidad: " + str(self.audioManager.sensitivity), self.font_color)
-        
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 250), "Volumen: " + str(self.volume), self.font_color)
-        
-        margin = 20
-        margin_height = 20
-        # In right corner show de hot keys
-        ctrlP_text = "Ctrl+P: Cambiar entre pantalla completa y ventana"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), ctrlP_text, self.font_color)
-        
-        margin += margin_height
-        
-        ctrlR_text = "Ctrl+R: Cambiar el modo de cambio de efecto"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), ctrlR_text, self.font_color)
-        
-        margin += margin_height
-        
-        ctrlS_text = "Ctrl+S: Cambiar al siguiente efecto"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), ctrlS_text, self.font_color)
-        
-        margin += margin_height
-        
-        ctrlD_text = "Ctrl+D: Activar/desactivar el modo de depuración"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), ctrlD_text, self.font_color)
-        
-        margin += margin_height
-        
-        CtrlE_text = "Ctrl+E: Cambiar la resolución +"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), CtrlE_text, self.font_color)
-        
-        margin += margin_height
-        
-        CtrlW_text = "Ctrl+W: Cambiar la resolución -"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), CtrlW_text, self.font_color)        
-        
-        margin += margin_height
-        
-        CtrlPlus_text = "Ctrl++: Aumentar la sensibilidad"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), CtrlPlus_text, self.font_color)
-        
-        margin += margin_height
-        
-        CtrlMinus_text = "Ctrl+-: Disminuir la sensibilidad"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), CtrlMinus_text, self.font_color)
-        
-        margin += margin_height
-        
-        ctrlQ_text = "Ctrl+Q: Salir"
-        self.font.render_to(self.screen, (self.actual_resolution[0] - 400, self.actual_resolution[1] - margin), ctrlQ_text, self.font_color)
-        
-    def hotkeys(self):
-        
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q and pygame.key.get_mods() & pygame.KMOD_CTRL:
-                    self.running = False
-                elif event.key == pygame.K_p and pygame.key.get_mods() & pygame.KMOD_CTRL:
+        return debug_data
+    
+    def some_function(self):
+        pass
 
-                    self.fullscreen = not self.fullscreen
-                    
-                    if self.fullscreen:
-                        self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
-                    else:
-                        self.screen = pygame.display.set_mode(self.actual_resolution)
-                        
-                    self.onScreenChange()
-                    
-                elif event.key == pygame.K_d and pygame.key.get_mods() & pygame.KMOD_CTRL:
-                    if self.debug_mode:
-                        self.debug_mode = False
-                    else:
-                        self.debug_mode = True
-                    
-                # Verificar si se presiona Ctrl+R para cambiar el modo de cambio de efecto
-                elif event.key == pygame.K_r and pygame.key.get_mods() & pygame.KMOD_CTRL:
-                    # Modes random, sequential and static
-                    if self.change_mode == "random":
-                        self.change_mode = "sequential"
-                    elif self.change_mode == "sequential":
-                        self.change_mode = "static"
-                    else:
-                        self.change_mode = "random"
+    def getCPUTemp(self):
+        # Suponiendo que esta función devuelve la temperatura de la CPU
+        return 42.0  # Ejemplo
 
-                # Verificar si se presiona Ctrl+S para cambiar al siguiente efecto
-                elif event.key == pygame.K_s and pygame.key.get_mods() & pygame.KMOD_CTRL:
-                    if self.change_mode == "random":
-                        self.change_mode = "sequential"
-                       
-                    self.current_function = self.next_effect()
-                    self.last_function_change_time = pygame.time.get_ticks()
-                    
-                #Cambiar la resolucion a la siguiente
-                elif event.key == pygame.K_e and pygame.key.get_mods() & pygame.KMOD_CTRL:
-                    self.actual_resolution = self.resolutions[(self.resolutions.index(self.actual_resolution) + 1) % len(self.resolutions)]
-                    
-                    if self.fullscreen:
-                        self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
-                    else:
-                        self.screen = pygame.display.set_mode(self.actual_resolution)
-                        
-                    self.onScreenChange()
-                    self.chargeParticles()
-                
-                elif event.key == pygame.K_w and pygame.key.get_mods() & pygame.KMOD_CTRL:
-                    self.actual_resolution = self.resolutions[(self.resolutions.index(self.actual_resolution) - 1) % len(self.resolutions)]
-                    
-                    if self.fullscreen:
-                        self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
-                    else:
-                        self.screen = pygame.display.set_mode(self.actual_resolution)
-                    
-                    self.onScreenChange()
-                    self.chargeParticles()
-                #Cambiar la sensibilidad
-                elif event.key == pygame.K_PLUS and pygame.key.get_mods() & pygame.KMOD_CTRL and float(self.audioManager.sensitivity) < 3.0:
-                    self.audioManager.sensitivity += 0.1
-                elif event.key == pygame.K_MINUS and pygame.key.get_mods() & pygame.KMOD_CTRL and float(self.audioManager.sensitivity) > 0.1:
-                    self.audioManager.sensitivity -= 0.1
-               
+    
     def onScreenChange(self):
         #Calcula las nuevas posiciones centrales
         self.center_x = self.actual_resolution[0] / 2 
