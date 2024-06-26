@@ -1,7 +1,7 @@
 import pygame
 import random
 import math
-from Particle import ParticleManager
+from Managers.particle_manager import ParticleManager
 
 class StarManager:
     def __init__(self, max_particles, screen, width, height):

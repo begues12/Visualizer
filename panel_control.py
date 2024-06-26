@@ -6,10 +6,12 @@ from tkinter import ttk
 class ControlPanel:
     def __init__(self, visualizer):
         print("Control Panel")
-        self.visualizer = visualizer
+        self.visualizer         = visualizer
+        self.particle_manager   = visualizer.get_particle_manager()
+        self.audio_manager      = visualizer.get_audio_manager()
         self.root = Tk()
         self.root.title("Control Panel")
-        self.effects_status = {name: BooleanVar(value=True) for name in [func.__name__ for func in self.visualizer.drawing_functions]}
+        self.effects_status = {name: BooleanVar(value=True) for name in [func.get_effect_name() for func in self.visualizer.drawing_functions]}
         self.order_var = StringVar(value="random")
 
         self.create_widgets()
@@ -17,10 +19,8 @@ class ControlPanel:
         self.last_selected_image = None
 
     def create_widgets(self):
-        # Notebook para las pestañas
         tab_control = ttk.Notebook(self.root)
 
-        # Pestañas
         tab_images = ttk.Frame(tab_control)
         tab_effects = ttk.Frame(tab_control)
         tab_particles = ttk.Frame(tab_control)  
@@ -31,29 +31,24 @@ class ControlPanel:
         tab_control.add(tab_settings, text='Settings')
         tab_control.pack(expand=1, fill="both")
 
-        # Llamada a métodos de configuración para cada pestaña
         self.setup_images_tab(tab_images)
         self.setup_effects_tab(tab_effects)
         self.setup_particles_tab(tab_particles)
         self.setup_settings_tab(tab_settings)
 
-        self.root.geometry("800x600")  # Tamaño inicial ajustable
+        self.root.geometry("800x600")
 
     def setup_images_tab(self, parent):
-        # Contenido de la pestaña de imágenes
         image_frame = ttk.Frame(parent)
         image_frame.pack(padx=10, pady=10, fill='both', expand=True)
 
-        # Etiqueta para 'Available Images'
         label = ttk.Label(image_frame, text="Available Images")
         label.grid(row=0, column=0, columnspan=2, pady=5, padx=5)  # Extender la etiqueta a dos columnas
 
-        # Listbox para seleccionar imágenes
         self.image_listbox = Listbox(image_frame, selectmode='single', width=50)
         self.image_listbox.bind("<<ListboxSelect>>", lambda event: self.load_image_size_entries())
         self.image_listbox.grid(row=1, column=0, columnspan=2, pady=5, padx=5)  # Extender el Listbox a dos columnas
 
-        # Cargar las imágenes disponibles
         self.load_images()
 
         # Entrada para la anchura de la imagen
@@ -102,7 +97,6 @@ class ControlPanel:
         prev_button.grid(row=len(self.effects_status) + 3, column=0, columnspan=2, pady=5, padx=5)
         
         
-        
     def setup_particles_tab(self, parent):
         particle_frame = ttk.Frame(parent)
         particle_frame.pack(padx=10, pady=10, fill='both', expand=True)
@@ -133,7 +127,7 @@ class ControlPanel:
         settings_frame.pack(padx=10, pady=10, fill='both', expand=True)
         
         ttk.Label(settings_frame, text="Sound Sensitivity:").grid(row=0, column=0, pady=5, padx=5)
-        self.sensitivity_var = DoubleVar(value=self.visualizer.sensitivity)  # Inicia con el valor actual de sensibilidad
+        self.sensitivity_var = DoubleVar(value=self.audio_manager.sensitivity)  # Inicia con el valor actual de sensibilidad
         sensitivity_scale = ttk.Scale(settings_frame, from_=0.0, to=5.0, orient='horizontal', variable=self.sensitivity_var, command=self.update_sensitivity)
         sensitivity_scale.grid(row=0, column=1, pady=5, padx=5)
         
@@ -169,19 +163,18 @@ class ControlPanel:
             file_name = self.image_listbox.get(selected_index)
             image_folder = os.path.join(os.path.dirname(__file__), "images")
             file_path = os.path.join(image_folder, file_name)
-            self.visualizer.image_path = file_path
             width_entry = int(float(self.image_width_entry.get()) * float(self.scale_factor_entry.get()))
             height_entry = int(float(self.image_height_entry.get()) * float(self.scale_factor_entry.get()))
-            self.visualizer.load_image(width_entry, height_entry)
+            self.visualizer.center_image.load_image(file_path, width_entry, height_entry)
 
     def toggle_debug_mode(self):
         self.visualizer.debug_mode = not self.visualizer.debug_mode
 
     def change_sensitivity(self, delta):
-        self.visualizer.sensitivity = max(0.1, min(3.0, self.visualizer.sensitivity + delta))
+        self.audio_manager.sensitivity = max(0.1, min(3.0, self.visualizer.sensitivity + delta))
 
     def update_sensitivity(self, new_value):
-        self.visualizer.sensitivity = float(new_value)
+        self.audio_manager.sensitivity = float(new_value)
         print(f"Sensitivity updated to {new_value}")
 
     

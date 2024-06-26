@@ -7,10 +7,14 @@ import math
 import colorsys
 import pygame.freetype
 import psutil
-from Particle import ParticleManager
+from Managers.particle_manager import ParticleManager
 from StarManager import StarManager
 from panel_control import ControlPanel
 from threading import Thread
+from Managers.audio_manager import AudioManager
+from Effects.center_image import CenterImage
+from Effects.spectrum_wave import SpectrumWave
+from Effects.spectrum_semicircles import SpectrumSemicircles
 
 class Visualizer:
     
@@ -18,20 +22,6 @@ class Visualizer:
     running = True
     font = None
     font_color = (255, 255, 255)  # Color del texto
-
-    # Pyaudio variables
-    p = pyaudio.PyAudio()
-    volume = 0
-    sensitivity = 1.0
-    CHUNK = 1024
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 1
-    RATE = 44100
-    stream = p.open(format=FORMAT,
-                channels=CHANNELS,
-                rate=RATE,
-                input=True,
-                frames_per_buffer=CHUNK)
 
     # Screen variables
     screen = None
@@ -41,6 +31,8 @@ class Visualizer:
     resolutions = [ (640, 480), (800, 600), (960, 540), (1024, 576), (1280, 720), (1366, 768), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160) ]
     fps = 60
     fullscreen = False
+    
+    audioManager = AudioManager()
     
     # Visualizer variables
     particle_manager = None
@@ -53,6 +45,7 @@ class Visualizer:
     last_time = 0
     effect_duration = 10000  # Duración de cada efecto en milisegundos
     last_function_change_time = 0
+    
     
     # Image variables
     image_path = os.path.join(os.path.dirname(__file__), "logo2.png")
@@ -92,21 +85,19 @@ class Visualizer:
         #Carga fuente
         self.font =  pygame.freetype.Font(None, 14)
         
-        # Carga de la imagen
-        self.fire_sign = pygame.image.load(self.image_path).convert_alpha()
-        self.fire_sign = pygame.transform.scale(self.fire_sign, (246, 246))
-        self.fire_sign_rect = self.fire_sign.get_rect()
-
-         # All drawing functions or classes
+        self.center_image = CenterImage(pygame.image.load(self.image_path), self, self.screen)
+        
+        
+        # All drawing functions or classes
         self.drawing_functions = [
-                        self.spectrum_wave,
-                        self.rotation_circles,
-                        self.background_color,
-                        self.bouncy_image,
-                        self.spectrum_semicircles, 
-                        self.circular_wave, 
-                        self.frequency_spectrum,
-                        self.shooting_stars,
+                        SpectrumWave(self),
+                        SpectrumSemicircles(self),
+                        # self.background_color,
+                        # self.bouncy_image,
+                        # self.spectrum_semicircles, 
+                        # self.circular_wave, 
+                        # self.frequency_spectrum,
+                        # self.shooting_stars,
                         ]
         
         self.active_effects = list(self.drawing_functions)
@@ -123,11 +114,11 @@ class Visualizer:
             
             self.hotkeys()
                         
-            audio_data = np.frombuffer(self.stream.read(self.CHUNK), dtype=np.int16)
-            self.volume = max(abs(audio_data.min()), abs(audio_data.max())) * self.sensitivity
+            audio_data = self.audioManager.getAudioData()
+            self.volume = self.audioManager.getVolume()
             
             self.screen.fill((0,0,0))
-            self.current_function(audio_data)  # Ejecuta la función actual
+            self.current_function.draw(audio_data)  # Ejecuta la función actual
             
             if pygame.time.get_ticks() - self.last_function_change_time >= self.effect_duration and self.change_mode != "static":
                 self.current_function = self.next_effect()
@@ -135,7 +126,7 @@ class Visualizer:
             
             # Calcula el volumen máximo de la señal de audio
             
-            self.draw_center_image(audio_data)
+            self.center_image.draw(audio_data)
 
             # Particles
             self.particle_manager.move_particles(audio_data, self.volume, self.clock.get_time())
@@ -152,11 +143,15 @@ class Visualizer:
         self.stream.close()
         self.p.terminate()
         pygame.quit()
-
-    def load_image(self, width, height):
-        self.fire_sign = pygame.image.load(self.image_path).convert_alpha()
-        self.fire_sign = pygame.transform.scale(self.fire_sign, (width, height))
-        self.fire_sign_rect = self.fire_sign.get_rect()
+    
+    def get_audio_manager(self):
+        return self.audioManager
+        
+    def get_particle_manager(self):
+        return self.particle_manager
+    
+    def get_screen_center(self):
+        return self.center_x, self.center_y
 
     def change_resolution(self, width, height):
         self.actual_resolution = (width, height)
@@ -169,49 +164,10 @@ class Visualizer:
         else:
             self.screen = pygame.display.set_mode(self.actual_resolution)
         self.onScreenChange()
-    
-    def draw_center_image(self, audio_data):
 
-        scale_change_speed = 0.5  # Ajusta la velocidad según desees
-        max_volume = 32768  # Valor máximo de volumen
-        max_scale = 2.0  # Escala máxima de la imagen (ajusta según desees)
-        target_scale = 1 + (max_scale - 1) * self.volume / max_volume
-        
-        # Interpola suavemente entre el tamaño actual y el tamaño objetivo
-        self.image_current_scale += (target_scale - self.image_current_scale) * scale_change_speed
-        
-        # Escala la imagen según el tamaño actual
-        scaled_fire_sign = pygame.transform.scale(
-            self.fire_sign, 
-            (int(self.fire_sign_rect.width * self.image_current_scale), 
-             int(self.fire_sign_rect.height * self.image_current_scale))
-            )
-
-        # Dibuja la imagen en el centro de la pantalla
-        self.screen.blit(scaled_fire_sign, (self.center_x - scaled_fire_sign.get_rect().width / 2, self.center_y - scaled_fire_sign.get_rect().height / 2))        
-
-    def spectrum_wave(self, audio_data):
-        line_width = 10
-        num_points = 8
-        points = []
-
-        for i in range(num_points):
-            index = i * len(audio_data) // num_points
-            x = i * self.actual_resolution[0] // num_points
-            y = (audio_data[index] + 32768) * self.actual_resolution[1] // 65535
-            points.append((x, y))
-            
-        # And the last line between the last point and the final of screen
-        x = self.actual_resolution[0]
-        y = (audio_data[-1] + 32768) * self.actual_resolution[1] // 65535
-        points.append((x, y))
-
-        color = self.Rcolor()
-        for i in range(1, len(points)):
-            pygame.draw.line(self.screen, color, points[i - 1], points[i], line_width)
     
     def update_active_effects(self, active_effect_names):
-        self.active_effects = [effect for effect in self.drawing_functions if effect.__name__ in active_effect_names]
+        self.active_effects = [effect for effect in self.drawing_functions if effect.get_effect_name() in active_effect_names]
         
         if not self.active_effects:
             self.active_effects = [self.idle_effect]  # Suponiendo que existe un efecto de reposo
@@ -220,26 +176,7 @@ class Visualizer:
         self.screen.fill((0, 0, 0))  # Simplemente rellena la pantalla de negro o muestra un mensaje.
         self.font.render_to(self.screen, (10, 10), "No active effects.", (255, 255, 255))
         
-    def spectrum_semicircles(self, audio_data):
-        
-        num_semicircles = 2
 
-        for i in range(num_semicircles):
-
-            rotation_speed = self.volume / 32768
-            angle = pygame.time.get_ticks() * rotation_speed
-            radius = int(random.randint(50, 150) * (1 + self.volume / 32768))
-
-            color = self.Rcolor()
-
-            start_angle = angle % (2 * np.pi)
-            end_angle = start_angle + np.pi
-
-            # Calculate the width of the arc based on the volume
-            arc_width = int(self.volume / 32768 * 10)  # You can adjust the multiplier as needed
-
-            pygame.draw.arc(self.screen, color, (self.center_x - radius, self.center_y - radius, radius * 2, radius * 2), start_angle, end_angle, arc_width)
-    
     def shooting_stars(self, audio_data):
         self.star_manager.draw_shooting_stars()
         self.star_manager.update_stars()
@@ -389,7 +326,7 @@ class Visualizer:
         cpu_temp_text = f"Temperatura de la CPU: "
         self.font.render_to(self.screen, (10, self.actual_resolution[1] - 190), cpu_temp_text + str(self.getCPUTemp()) + "ºC", self.font_color)
         
-        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 220), "Sensibilidad: " + str(self.sensitivity), self.font_color)
+        self.font.render_to(self.screen, (10, self.actual_resolution[1] - 220), "Sensibilidad: " + str(self.audioManager.sensitivity), self.font_color)
         
         self.font.render_to(self.screen, (10, self.actual_resolution[1] - 250), "Volumen: " + str(self.volume), self.font_color)
         
@@ -505,10 +442,10 @@ class Visualizer:
                     self.onScreenChange()
                     self.chargeParticles()
                 #Cambiar la sensibilidad
-                elif event.key == pygame.K_PLUS and pygame.key.get_mods() & pygame.KMOD_CTRL and float(self.sensitivity) < 3.0:
-                    self.sensitivity += 0.1
-                elif event.key == pygame.K_MINUS and pygame.key.get_mods() & pygame.KMOD_CTRL and float(self.sensitivity) > 0.1:
-                    self.sensitivity -= 0.1
+                elif event.key == pygame.K_PLUS and pygame.key.get_mods() & pygame.KMOD_CTRL and float(self.audioManager.sensitivity) < 3.0:
+                    self.audioManager.sensitivity += 0.1
+                elif event.key == pygame.K_MINUS and pygame.key.get_mods() & pygame.KMOD_CTRL and float(self.audioManager.sensitivity) > 0.1:
+                    self.audioManager.sensitivity -= 0.1
                
     def onScreenChange(self):
         #Calcula las nuevas posiciones centrales
@@ -521,9 +458,7 @@ class Visualizer:
         #Calcula la nueva velocidad de las partículas
         self.particle_speed = self.actual_resolution[0] / 100
     
-    def Rcolor(self):
-        return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-    
+
     def getCPUTemp(self):
         try:
             tempFile = open( "/sys/class/thermal/thermal_zone0/temp" )
