@@ -3,7 +3,7 @@ import os
 from tkinter import Listbox, Entry
 from tkinter import ttk
 
-class ControlPanelImages:
+class Images:
     
     def __init__(self):
         pass
@@ -16,7 +16,7 @@ class ControlPanelImages:
             if file_name.lower().endswith(('.png', '.jpg', '.jpeg')):
                 self.image_listbox.insert(END, file_name)
     
-    def setup_images_tab(self, parent):
+    def tab(self, parent):
         image_frame = ttk.Frame(parent)
         image_frame.pack(padx=10, pady=10, fill='both', expand=True)
 

@@ -1,4 +1,6 @@
-def setup_particles_tab(self, parent):
+
+
+        def setup_particles_tab(self, parent):
         particle_frame = ttk.Frame(parent)
         particle_frame.pack(padx=10, pady=10, fill='both', expand=True)
 
