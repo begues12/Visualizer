@@ -1,4 +1,24 @@
-def setup_effects_tab(self, parent):
+import tkinter as tk
+from tkinter import ttk    
+
+class Effects:
+    
+    def __init__(self, parent):
+        self.parent = parent
+        self.effects_status = {
+            "Color": tk.BooleanVar(),
+            "Size": tk.BooleanVar(),
+            "Speed": tk.BooleanVar(),
+            "Direction": tk.BooleanVar(),
+            "Shape": tk.BooleanVar(),
+            "Opacity": tk.BooleanVar(),
+            "Rotation": tk.BooleanVar(),
+            "Position": tk.BooleanVar()
+        }
+        self.order_var = tk.StringVar()
+        self.order_var.set("static")
+
+    def tab(self, parent):
         # Contenido de la pestaña de efectos
         effects_frame = ttk.Frame(parent)
         effects_frame.pack(padx=10, pady=10, fill='both', expand=True)
