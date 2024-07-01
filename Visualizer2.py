@@ -7,7 +7,6 @@ import math
 import pygame.freetype
 import psutil
 from Managers.particle_manager import ParticleManager
-from StarManager import StarManager
 from panel_control import ControlPanel
 from threading import Thread
 from Managers.audio_manager import AudioManager
@@ -16,6 +15,9 @@ from Effects.spectrum_wave import SpectrumWave
 from Effects.spectrum_semicircles import SpectrumSemicircles
 from Effects.shooting_starts import ShootingStars
 from Effects.frequency_spectrum import FrequencySpectrum
+from Effects.background_color import BackgroundColor
+from Effects.rotation_circles import RotationCircles
+from Effects.circular_weave import CircularWeave
 
 class Visualizer:
     
@@ -42,7 +44,7 @@ class Visualizer:
     image_size = 1
     image_current_scale = 1
     current_function = None
-    change_mode = "static"
+    change_mode = "random"
     last_time = 0
     effect_duration = 10000  # Duración de cada efecto en milisegundos
     last_function_change_time = 0
@@ -97,12 +99,9 @@ class Visualizer:
                         SpectrumSemicircles(self),
                         ShootingStars(self),
                         FrequencySpectrum(self),
-                        # self.background_color,
-                        # self.bouncy_image,
-                        # self.spectrum_semicircles, 
-                        # self.circular_wave, 
-                        # self.frequency_spectrum,
-                        # self.shooting_stars,
+                        BackgroundColor(self),
+                        RotationCircles(self),
+                        CircularWeave(self)
                         ]
         
         self.active_effects = list(self.drawing_functions)
@@ -112,43 +111,46 @@ class Visualizer:
         
     def chargeParticles(self):
         self.particle_manager = ParticleManager(self.max_particles, self.screen, self.actual_resolution[0], self.actual_resolution[1])
-        self.star_manager = StarManager(10, self.screen, self.actual_resolution[0], self.actual_resolution[1])
         
     def start(self):
         while self.running:
-                                    
+            # Obtén datos de audio y volumen una sola vez por iteración
             audio_data = self.audioManager.getAudioData()
-            self.volume = self.audioManager.getVolume()
-            
-            self.screen.fill((0,0,0))
-            
-            # If has draw function, execute it
-            if self.current_function and hasattr(self.current_function, 'draw'):
-                self.current_function.draw(audio_data)  # Ejecuta la función actual
-            
-            if pygame.time.get_ticks() - self.last_function_change_time >= self.effect_duration and self.change_mode != "static":
-                self.current_function = self.next_effect()
-                self.last_function_change_time = pygame.time.get_ticks()
-            
-            # Calcula el volumen máximo de la señal de audio
-            
-            self.center_image.draw(audio_data)
+            volume = self.audioManager.getVolume()
 
-            # Particles
-            self.particle_manager.move_particles(audio_data, self.volume, self.clock.get_time())
+            # Actualiza la pantalla y la imagen central
+            self.screen.fill((0, 0, 0))
+
+            # Ejecuta la función de dibujo actual si existe
+            if self.current_function and hasattr(self.current_function, 'draw'):
+                self.current_function.draw(audio_data)
+
+            self.center_image.draw(audio_data)
+        
+            # Cambia la función de efecto según el tiempo y modo
+            current_time = pygame.time.get_ticks()
+            if (current_time - self.last_function_change_time >= self.effect_duration and
+                self.change_mode != "static"):
+                self.current_function = self.next_effect()
+                self.last_function_change_time = current_time
+
+            # Manejo de partículas
+            self.particle_manager.move_particles(audio_data, volume, self.clock.get_time())
             self.particle_manager.update_particles()
-            # self.particle_manager.update_scale(audio_data, self.volume)
-            
-            # Dibuja el texto de depuración en la esquina inferior derecha si el modo de depuración está activado
+
+            # Modo de depuración
             if self.debug_mode:
                 self.debug()
-            
+
+            # Actualiza la pantalla
             pygame.display.flip()
-            
+
+        # Limpieza final al terminar el bucle
         self.stream.stop_stream()
         self.stream.close()
         self.p.terminate()
         pygame.quit()
+
     
     def get_screen(self):
         return self.screen
@@ -160,7 +162,7 @@ class Visualizer:
         return self.particle_manager
     
     def get_screen_center(self):
-        return self.center_x, self.center_y
+        return self.screen.get_width() / 2, self.screen.get_height() / 2
 
     def change_resolution(self, width, height):
         self.actual_resolution = (width, height)
@@ -172,8 +174,8 @@ class Visualizer:
             self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
         else:
             self.screen = pygame.display.set_mode(self.actual_resolution)
+            
         self.onScreenChange()
-
     
     def update_active_effects(self, active_effect_names):
         self.active_effects = [effect for effect in self.drawing_functions if effect.get_effect_name() in active_effect_names]
@@ -185,83 +187,6 @@ class Visualizer:
         self.screen.fill((0, 0, 0))  # Simplemente rellena la pantalla de negro o muestra un mensaje.
         self.font.render_to(self.screen, (10, 10), "No active effects.", (255, 255, 255))
             
-    def rotation_circles(self, audio_data):
-        center_x = self.actual_resolution[0] // 2
-        center_y = self.actual_resolution[1] // 2
-        angle = 0
-        max_radius = 250
-        num_points = 10
-        angle_step = 6 * math.pi / num_points
-        
-        for _ in range(num_points):
-            x = center_x + int(max_radius * math.cos(angle))
-            y = center_y + int(max_radius * math.sin(angle))
-            scaled_radius = 30 * (1 + self.volume / 32768)
-            color = self.Rcolor()
-            pygame.draw.circle(self.screen, color, (x, y), int(scaled_radius))
-            angle += angle_step
-
-    def circular_wave(self, audio_data):
-        radius = int(self.volume / 32768 * 2000 + 20)  # Convierte el valor a un entero usando int()
-        color = self.Rcolor()
-        center = (int(self.center_x), int(self.center_y))  
-        pygame.draw.circle(self.screen, color, center, radius)
-
-    def background_color(self, audio_data):
-    # Define un umbral para el volumen alto
-        high_volume_threshold = 10000  # Ajusta este valor según tus preferencias
-
-        # Cambia el color de fondo si el volumen supera el umbral
-        if self.volume > high_volume_threshold:
-            color = self.Rcolor()  # Cambia el color como prefieras
-        else:
-            color = (0, 0, 0)  # Color de fondo predeterminado cuando el volumen no es alto
-
-        self.screen.fill(color)
-        
-    def bouncy_image(self, audio_data):
-        num_logos = 10
-        if not hasattr(self, "logos"):
-            # Inicializa la lista de logos si aún no existe
-            self.logos = []
-
-            for _ in range(num_logos):
-                logo = pygame.image.load(self.image_path).convert_alpha()
-                logo_width, logo_height = logo.get_width(), logo.get_height()
-                x = random.randint(0, self.actual_resolution[0])
-                y = random.randint(0, self.actual_resolution[1])
-                scale = 0.2 + (self.volume / 32768)
-                angle = random.uniform(0, 360)
-
-                # Agrega el logo inicializado a la lista
-                self.logos.append({"image": logo, "width": logo_width, "height": logo_height,
-                                "x": x, "y": y, "scale": scale, "angle": angle})
-
-        for logo in self.logos:
-            # Calcula el desplazamiento basado en la velocidad
-            speed = 5  # Puedes ajustar la velocidad según tus preferencias
-            dx = speed * math.cos(math.radians(logo["angle"]))
-            dy = speed * math.sin(math.radians(logo["angle"]))
-
-            # Mueve el logo
-            logo["x"] += dx
-            logo["y"] += dy
-
-            # Rebotar en las paredes
-            if logo["x"] < 0 or logo["x"] + logo["width"] > self.actual_resolution[0]:
-                logo["angle"] = 180 - logo["angle"]
-            if logo["y"] < 0 or logo["y"] + logo["height"] > self.actual_resolution[1]:
-                logo["angle"] = 360 - logo["angle"]
-
-            # Dibuja el logo
-            scaled_logo = pygame.transform.rotozoom(logo["image"], logo["angle"], logo["scale"])
-            color = self.Rcolor()
-            alpha = 255
-            colorized_logo = pygame.Surface(scaled_logo.get_size(), pygame.SRCALPHA)
-            colorized_logo.fill((color[0], color[1], color[2], alpha))
-            colorized_logo.blit(scaled_logo, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-            self.screen.blit(colorized_logo, (logo["x"], logo["y"]))
-                
     def next_effect(self):
         if self.change_mode == "random":
             return random.choice(self.active_effects)
@@ -270,59 +195,13 @@ class Visualizer:
             next_function_index = current_function_index + 1 if current_function_index < len(self.active_effects) - 1 else 0
             return self.active_effects[next_function_index]
          
-    def debug_info(self):
-        current_time = pygame.time.get_ticks()
-        elapsed_time = current_time - self.last_time
-        if elapsed_time > 0:
-            current_fps = int(1000 / elapsed_time)
-        
-        self.last_time = current_time
-        current_function_name = self.current_function.get_effect_name() if self.current_function else "None"
-
-        debug_data = {
-            "FPS": current_fps,
-            "current_function": current_function_name,
-            "change_mode": self.change_mode,
-            "time_left": int((self.effect_duration - (current_time - self.last_function_change_time)) / 1000),
-            "num_particles": self.particle_manager.getNumParticles(),
-            "max_amplitude": "NaN",
-            "cpu_usage": psutil.cpu_percent(),
-            "cpu_temp": self.getCPUTemp(),
-            "sensitivity": self.audioManager.sensitivity,
-            "volume": self.get_audio_manager().getVolume(),
-            "resolution": f"{self.actual_resolution[0]}x{self.actual_resolution[1]}"
-        }
-
-        return debug_data
-    
-    def some_function(self):
-        pass
-
-    def getCPUTemp(self):
-        # Suponiendo que esta función devuelve la temperatura de la CPU
-        return 42.0  # Ejemplo
-
     
     def onScreenChange(self):
         #Calcula las nuevas posiciones centrales
+        self.center_image.recalculate_center()
         self.center_x = self.actual_resolution[0] / 2 
         self.center_y = self.actual_resolution[1] / 2
-        
-        #Calcula el nuevo tamaño de las partículas
-        self.particle_size = self.actual_resolution[0] / 100
-        
-        #Calcula la nueva velocidad de las partículas
-        self.particle_speed = self.actual_resolution[0] / 100
-    
 
-    def getCPUTemp(self):
-        try:
-            tempFile = open( "/sys/class/thermal/thermal_zone0/temp" )
-            cpu_temp = tempFile.read()
-            tempFile.close()
-            return float(cpu_temp)/1000
-        except:
-            return 0
         
 def run_visualizer(control_panel):
     visualizer = control_panel.visualizer

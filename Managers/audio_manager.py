@@ -2,28 +2,41 @@ import pyaudio
 import numpy as np
 
 class AudioManager:
-    
-    p = pyaudio.PyAudio()
-    volume = 0.5
-    rate = 44100
-    sensitivity = 0.5
-    chunk = 1024
-    channels = 1
-    max_volume = 32768
-    stream = p.open(format=pyaudio.paInt16,
-                    channels=channels,
-                    rate=rate,
-                    input=True,
-                    frames_per_buffer=chunk)
-    
+    # Constantes de clase para configuración de PyAudio
+    RATE = 44100
+    CHUNK = 1024
+    CHANNELS = 1
+    FORMAT = pyaudio.paInt16
+    MAX_VOLUME = 32768
+
     def __init__(self):
-        pass
-    
+        self.p = pyaudio.PyAudio()
+        self.stream = self.p.open(format=self.FORMAT,
+                                  channels=self.CHANNELS,
+                                  rate=self.RATE,
+                                  input=True,
+                                  frames_per_buffer=self.CHUNK)
+        self.volume = 0.5
+        self.sensitivity = 0.5
+        self.max_volume = 32768
+
     def getAudioData(self):
-        return np.frombuffer(self.stream.read(self.chunk), dtype=np.int16)
-    
+        try:
+            data = self.stream.read(self.CHUNK)
+            return np.frombuffer(data, dtype=np.int16)
+        except IOError as e:
+            print(f"Error reading audio data: {e}")
+            return np.zeros(self.CHUNK, dtype=np.int16)
+
+    def getVolume(self):
+        audio_data = self.getAudioData()
+        volume_level = max(abs(audio_data.min()), abs(audio_data.max())) * self.sensitivity
+        return volume_level
+
     def setVolume(self, volume):
         self.volume = volume
 
-    def getVolume(self):
-        return max(abs(self.getAudioData().min()), abs(self.getAudioData().max())) * self.sensitivity
+    def close(self):
+        self.stream.stop_stream()
+        self.stream.close()
+        self.p.terminate()

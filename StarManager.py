@@ -5,7 +5,7 @@ from Managers.particle_manager import ParticleManager
 
 class StarManager:
     def __init__(self, max_particles, screen, width, height):
-        self.max_particles = max_particles
+        self.max_particles = 10
         self.stars = []  # Lista para las estrellas
         self.screen = screen
         self.width = int(width)

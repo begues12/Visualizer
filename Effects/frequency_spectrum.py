@@ -16,9 +16,10 @@ class FrequencySpectrum(Effect):
             "num_semicircles": 2,
             "max_radius": 150,
             "min_radius": 50,
-            "arc_width": 10,
-            
+            "arc_width": 10,   
         }
+        self.config_file = "Effects/configs/frequency_spectrum_config.json"
+        self.load_config_from_file(self.config_file)
         
     def draw(self, audio_data):
         

@@ -14,6 +14,8 @@ class SpectrumWave(Effect):
             "line_width": 10,
             "num_points": 8
         }
+        self.config_file = "Effects/configs/spectrum_wave_config.json"
+        self.load_config_from_file(self.config_file)
     
     def draw(self, audio_data):
         line_width = self.config["line_width"]

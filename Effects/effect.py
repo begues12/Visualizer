@@ -1,10 +1,14 @@
 import random
+import json
 
 class Effect:
     def __init__(self, effect_name, visualizer, particle_manager):
         self.effect_name = effect_name  
         self.visualizer = visualizer 
         self.config = {}
+    
+    def get_config(self):
+        return self.config
     
     def save_config(self, config):
         self.config = config
@@ -30,3 +34,23 @@ class Effect:
     
     def draw(self, audio_data):
         raise NotImplementedError("This method should be overridden by subclasses.")
+
+    def check_config(self, file_path):
+        # If not exists, create a new file
+        try:
+            with open(file_path, 'r') as file:
+                pass
+        except FileNotFoundError:
+            with open(file_path, 'w') as file:
+                json.dump(self.config, file)
+    
+    def save_config_to_file(self, file_path):
+        with open(file_path, 'w') as file:
+            json.dump(self.config, file)
+    
+    def load_config_from_file(self, file_path):
+        self.check_config(file_path)
+        
+        with open(file_path, 'r') as file:
+            self.config = json.load(file)
+            

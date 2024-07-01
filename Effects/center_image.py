@@ -32,3 +32,6 @@ class CenterImage:
         self.image = pygame.transform.scale(self.image, (int(width * self.image_current_scale), 
                                                         int(height * self.image_current_scale)))
         self.original_rect = self.image.get_rect()
+
+    def recalculate_center(self):
+        self.center_x, self.center_y = self.visualizer.get_screen_center()
