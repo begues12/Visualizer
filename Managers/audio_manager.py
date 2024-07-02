@@ -20,6 +20,14 @@ class AudioManager:
         self.sensitivity = 0.5
         self.max_volume = 32768
 
+    def getFrequencyData(self):
+        audio_data = self.getAudioData()
+        # Apply FFT and return the magnitude (absolute value) of the FFT result
+        frequency_data = np.fft.fft(audio_data)
+        magnitude = np.abs(frequency_data)  # Convert complex numbers to real numbers (magnitude)
+        return magnitude
+    
+    
     def getAudioData(self):
         try:
             data = self.stream.read(self.CHUNK)

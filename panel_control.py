@@ -145,7 +145,7 @@ class ControlPanel:
 
     def save_effects_configuration(self):
         for effect in self.visualizer.drawing_functions:
-            effect.save_config_to_file(self.config_file)
+            effect.save_config_to_file(effect.get_config_file())
         
     def setup_particles_tab(self, parent):
         particle_frame = ttk.Frame(parent)
@@ -251,6 +251,7 @@ class ControlPanel:
     def change_resolution(self, resolution):
         width, height = map(int, resolution.split('x'))
         self.visualizer.change_resolution(width, height)
+        self.particle_manager.onScreenResize(width, height)
 
     def change_screen(self, screen):
         screen_num = int(screen.split()[1]) - 1

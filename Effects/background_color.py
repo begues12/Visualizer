@@ -7,7 +7,7 @@ class BackgroundColor(Effect):
         super().__init__(
             "Background Color",
             visualizer,
-            visualizer.particle_manager
+            visualizer.get_screen()
             )
         self.audio_manager = visualizer.get_audio_manager()
         self.screen = visualizer.get_screen()

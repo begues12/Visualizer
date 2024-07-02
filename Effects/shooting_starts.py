@@ -8,14 +8,14 @@ class ShootingStars(Effect):
         super().__init__(
             "Shooting Stars",
             visualizer,
-            visualizer.get_particle_manager()
+            visualizer.get_screen()
             )
         self.visualizer = visualizer
         self.star_manager = StarManager(
             self.visualizer.get_particle_manager().get_max_particles(),
             self.visualizer.screen, 
-            self.visualizer.actual_resolution[0], 
-            self.visualizer.actual_resolution[1]
+            self.width,
+            self.height
             )
         
     def draw(self, audio_data):

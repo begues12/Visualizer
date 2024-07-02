@@ -7,9 +7,9 @@ class CircularWeave(Effect):
     
     def __init__(self, visualizer):
         super().__init__(
-            "Spectrum Semicircles",
+            "Circular Weave",
             visualizer,
-            visualizer.particle_manager
+            visualizer.get_screen()
         )
         
         self.audio_manager = visualizer.get_audio_manager()
@@ -24,5 +24,4 @@ class CircularWeave(Effect):
     def draw(self, audio_data):
         radius = int(self.audio_manager.getVolume() / 32768 * self.config["radius"])
         color = self.random_color()
-        center = (int(self.screen.get_width() / 2), int(self.screen.get_height() / 2))
-        pygame.draw.ellipse(self.screen, (23, 23, 23), (center[0] - radius, center[1] - radius, radius * 2, radius * 2), 1)
+        pygame.draw.ellipse(self.screen, color, (self.center_x - radius, self.center_y - radius, radius * 2, radius * 2))

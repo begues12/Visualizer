@@ -18,6 +18,8 @@ from Effects.frequency_spectrum import FrequencySpectrum
 from Effects.background_color import BackgroundColor
 from Effects.rotation_circles import RotationCircles
 from Effects.circular_weave import CircularWeave
+from Effects.frequency_waterfall import FrequencyWaterfall
+from Effects.spinning_bars import SpinningBarsEffect
 
 class Visualizer:
     
@@ -28,7 +30,7 @@ class Visualizer:
 
     # Screen variables
     screen = None
-    actual_resolution = (640, 480)
+    actual_resolution = (1280, 720)
     center_x, center_y = actual_resolution[0] / 2, actual_resolution[1] / 2
     # 10 Types of resolutions 16:9
     resolutions = [ (640, 480), (800, 600), (960, 540), (1024, 576), (1280, 720), (1366, 768), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160) ]
@@ -44,7 +46,7 @@ class Visualizer:
     image_size = 1
     image_current_scale = 1
     current_function = None
-    change_mode = "random"
+    change_mode = "static"  # Modo de cambio de efecto: "static", "random" o "sequential"
     last_time = 0
     effect_duration = 10000  # Duración de cada efecto en milisegundos
     last_function_change_time = 0
@@ -101,7 +103,8 @@ class Visualizer:
                         FrequencySpectrum(self),
                         BackgroundColor(self),
                         RotationCircles(self),
-                        CircularWeave(self)
+                        CircularWeave(self),
+                        SpinningBarsEffect(self)
                         ]
         
         self.active_effects = list(self.drawing_functions)
@@ -201,6 +204,7 @@ class Visualizer:
         self.center_image.recalculate_center()
         self.center_x = self.actual_resolution[0] / 2 
         self.center_y = self.actual_resolution[1] / 2
+        self.current_function.on_screen_resize(self.actual_resolution[0], self.actual_resolution[1])
 
         
 def run_visualizer(control_panel):

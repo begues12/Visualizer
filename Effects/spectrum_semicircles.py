@@ -9,7 +9,7 @@ class SpectrumSemicircles(Effect):
         super().__init__(
             "Spectrum Semicircles",
             visualizer,
-            visualizer.particle_manager
+            visualizer.get_screen()
         )
         self.audio_manager = visualizer.get_audio_manager()
         self.config = {
@@ -28,7 +28,6 @@ class SpectrumSemicircles(Effect):
         
         angle_increment = volume_level * self.config["rotation_speed_multiplier"]
         current_angle = pygame.time.get_ticks() * angle_increment
-        center_x, center_y = self.visualizer.get_screen_center()
 
         for _ in range(num_semicircles):
             radius = int(random.randint(self.config["min_radius"], self.config["max_radius"]) * (1 + volume_level))
@@ -37,5 +36,5 @@ class SpectrumSemicircles(Effect):
             end_angle = start_angle + np.pi
             arc_width = int(volume_level * self.config["arc_width_multiplier"])
             
-            rect = (center_x - radius, center_y - radius, radius * 2, radius * 2)
+            rect = (self.get_center_x() - radius, self.get_center_y() - radius, 2 * radius, 2 * radius)
             pygame.draw.arc(self.visualizer.screen, color, rect, start_angle, end_angle, arc_width)

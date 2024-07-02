@@ -7,7 +7,7 @@ class SpectrumWave(Effect):
         super().__init__(
             "Spectrum Wave", 
             visualizer,
-            visualizer.particle_manager
+            visualizer.get_screen()
             )
         
         self.config = {
@@ -24,12 +24,12 @@ class SpectrumWave(Effect):
 
         for i in range(num_points):
             index = i * len(audio_data) // num_points
-            x = i * self.visualizer.actual_resolution[0] // num_points
-            y = (audio_data[index] + 32768) * self.visualizer.actual_resolution[1] // 65535
+            x = i * self.get_width() // num_points
+            y = (audio_data[index] + 32768) * self.get_height() // 65535
             points.append((x, y))
 
-        x = self.visualizer.actual_resolution[0]
-        y = (audio_data[-1] + 32768) * self.visualizer.actual_resolution[1] // 65535
+        x = self.get_width()
+        y = (audio_data[-1] + 32768) * self.get_height() // 65535
         points.append((x, y))
 
         color = self.random_color()

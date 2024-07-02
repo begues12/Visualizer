@@ -26,6 +26,9 @@ class ParticleManager:
         
         return particle
 
+    def onScreenResize(self, width, height):
+        self.width = width
+        self.height = height
 
     def create_explosion(self, x, y):
         for _ in range(10):  # Crea una explosión con múltiples partículas
