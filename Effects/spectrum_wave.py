@@ -25,11 +25,12 @@ class SpectrumWave(Effect):
         for i in range(num_points):
             index = i * len(audio_data) // num_points
             x = i * self.get_width() // num_points
-            y = (audio_data[index] + 32768) * self.get_height() // 65535
+            y = ((audio_data[index] + 32768) * self.get_height()) // 65536
             points.append((x, y))
 
         x = self.get_width()
-        y = (audio_data[-1] + 32768) * self.get_height() // 65535
+        y = ((audio_data[index] + 32768) * self.get_height()) // 65536
+
         points.append((x, y))
 
         color = self.random_color()
