@@ -229,11 +229,6 @@ class ControlPanel:
             width_entry = int(float(self.image_width_entry.get()) * float(self.scale_factor_entry.get()))
             height_entry = int(float(self.image_height_entry.get()) * float(self.scale_factor_entry.get()))
             self.visualizer.center_image.load_image(file_path, width_entry, height_entry)
-
-    def save_effects_configuration(self):
-        for effect in self.visualizer.drawing_functions:
-            file_path = os.path.join(os.path.dirname(__file__), f"{effect.get_effect_name().replace(' ', '_')}_config.json")
-            effect.save_config_to_file(file_path)
     
     def toggle_debug_mode(self):
         self.visualizer.debug_mode = not self.visualizer.debug_mode
