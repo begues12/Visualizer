@@ -104,7 +104,6 @@ class Visualizer:
                         BackgroundColor(self),
                         RotationCircles(self),
                         CircularWeave(self),
-                        SpinningBarsEffect(self)
                         ]
         
         self.active_effects = list(self.drawing_functions)

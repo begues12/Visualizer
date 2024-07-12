@@ -87,9 +87,7 @@ class ControlPanel:
             effect_frame = ttk.Frame(notebook)
             notebook.add(effect_frame, text=effect.get_effect_name())
             self.setup_effect_config(effect, effect_frame)
-        
-        save_button = ttk.Button(notebook, text="Save Effects Configuration", command=self.save_effects_configuration)
-        save_button.pack(pady=10, padx=10)
+    
 
     def setup_basic_config_tab(self, parent):
         
