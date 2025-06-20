@@ -20,6 +20,7 @@ from Effects.rotation_circles import RotationCircles
 from Effects.circular_weave import CircularWeave
 from Effects.frequency_waterfall import FrequencyWaterfall
 from Effects.spinning_bars import SpinningBarsEffect
+from Effects.aurora_bars import AuroraBars
 
 class Visualizer:
     
@@ -97,15 +98,16 @@ class Visualizer:
         
         # All drawing functions or classes
         self.drawing_functions = [
-                        SpectrumWave(self),
-                        SpectrumSemicircles(self),
-                        ShootingStars(self),
-                        FrequencySpectrum(self),
-                        BackgroundColor(self),
-                        RotationCircles(self),
-                        CircularWeave(self),
-                        ]
-        
+            SpectrumWave(self),
+            SpectrumSemicircles(self),
+            ShootingStars(self),
+            FrequencySpectrum(self),
+            BackgroundColor(self),
+            RotationCircles(self),
+            CircularWeave(self),
+            AuroraBars(self),
+        ]
+
         self.active_effects = list(self.drawing_functions)
 
         self.chargeParticles()
@@ -116,9 +118,16 @@ class Visualizer:
         
     def start(self):
         while self.running:
+            self.clock.tick(self.fps)
+
+            # Procesa eventos de pygame (importante para evitar que la ventana se congele)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+
             # Obtén datos de audio y volumen una sola vez por iteración
-            audio_data = self.audioManager.getAudioData()
-            volume = self.audioManager.getVolume()
+            audio_data = self.audioManager.get_audio_data()
+            volume = self.audioManager.get_volume(audio_data)
 
             # Actualiza la pantalla y la imagen central
             self.screen.fill((0, 0, 0))
@@ -128,7 +137,7 @@ class Visualizer:
                 self.current_function.draw(audio_data)
 
             self.center_image.draw(audio_data)
-        
+
             # Cambia la función de efecto según el tiempo y modo
             current_time = pygame.time.get_ticks()
             if (current_time - self.last_function_change_time >= self.effect_duration and
@@ -148,9 +157,6 @@ class Visualizer:
             pygame.display.flip()
 
         # Limpieza final al terminar el bucle
-        self.stream.stop_stream()
-        self.stream.close()
-        self.p.terminate()
         pygame.quit()
 
     

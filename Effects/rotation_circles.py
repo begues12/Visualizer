@@ -25,7 +25,7 @@ class RotationCircles(Effect):
         
     def draw(self, audio_data):
         max_radius = self.config["max_radius"]
-        volume_scale = 30 * (1 + self.audio_manager.getVolume() / 32768)
+        volume_scale = 30 * (1 + self.audio_manager.get_volume(audio_data) / 32768)
         self.current_angle += self.config["rotation_speed"]
 
         for i, base_angle in enumerate(self.angles):

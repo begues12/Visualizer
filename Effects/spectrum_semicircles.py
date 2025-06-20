@@ -24,7 +24,7 @@ class SpectrumSemicircles(Effect):
         
     def draw(self, audio_data):
         num_semicircles = self.config["num_semicircles"]
-        volume_level = self.audio_manager.getVolume() / 32768  # Pre-calcular esto mejora la eficiencia
+        volume_level = self.audio_manager.get_volume(audio_data) / 32768  # Pre-calcular esto mejora la eficiencia
         
         angle_increment = volume_level * self.config["rotation_speed_multiplier"]
         current_angle = pygame.time.get_ticks() * angle_increment

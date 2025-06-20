@@ -16,7 +16,7 @@ class CenterImage:
         self.center_x, self.center_y = self.visualizer.get_screen_center()
 
     def draw(self, audio_data):
-        target_scale = 1 + (self.max_scale - 1) * self.audio_manager.getVolume() / self.audio_manager.max_volume
+        target_scale = 1 + (self.max_scale - 1) * self.audio_manager.get_volume(audio_data) / self.audio_manager.max_volume
         self.image_current_scale += (target_scale - self.image_current_scale) * self.scale_change_speed
 
         new_width = int(self.original_rect.width * self.image_current_scale)

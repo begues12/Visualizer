@@ -20,7 +20,7 @@ class BackgroundColor(Effect):
     
     def draw(self, audio_data):
         high_volume_threshold = 10000  
-        if self.audio_manager.getVolume() > high_volume_threshold:
+        if self.audio_manager.get_volume(audio_data) > high_volume_threshold:
             color = self.random_color()
         else:
             color = (0, 0, 0)  

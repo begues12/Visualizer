@@ -25,7 +25,7 @@ class FrequencySpectrum(Effect):
 
     def draw(self, audio_data):
         current_time = time.time() * 2  # Current time factor to modify the phase dynamically
-        volume_base = self.audio_manager.getVolume() / 32768 * self.screen.get_height()
+        volume_base = self.audio_manager.get_volume(audio_data) / 32768 * self.screen.get_height()
 
         for i in range(self.config["num_bands"]):
             phase_shift = (math.pi * 2) * (i / float(self.config["num_bands"]))

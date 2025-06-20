@@ -1,5 +1,6 @@
 from Effects.effect import Effect
 import pygame
+import numpy as np
 
 class SpectrumWave(Effect):
     
@@ -18,6 +19,7 @@ class SpectrumWave(Effect):
         self.load_config_from_file(self.config_file)
     
     def draw(self, audio_data):
+        audio_data = audio_data.astype(np.int32)
         line_width = self.config["line_width"]
         num_points = self.config["num_points"]
         points = []

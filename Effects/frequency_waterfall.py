@@ -37,7 +37,7 @@ class FrequencyWaterfall(Effect):
     def draw(self, audio_data):
         self.screen.fill((0, 0, 0))  # Limpiar pantalla para la nueva frame
         freq_data = self.audio_manager.getFrequencyData()
-        volume = self.audio_manager.getVolume()
+        volume = self.audio_manager.get_volume(audio_data)
 
         self.update_particles(volume, freq_data)
 
