@@ -217,8 +217,9 @@ def run_visualizer(control_panel):
     visualizer.start()
         
 if __name__ == "__main__":
-    control_panel = ControlPanel(Visualizer())
-    visualizer_thread = Thread(target=run_visualizer, args=(control_panel,))
-    visualizer_thread.start()
-    control_panel.root.mainloop()
+    visualizer = Visualizer()
+    control_panel = ControlPanel(visualizer)
+    control_panel_thread = Thread(target=control_panel.root.mainloop)
+    control_panel_thread.start()
+    visualizer.start()
     
