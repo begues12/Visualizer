@@ -16,6 +16,7 @@ class SpinningBarsEffect(Effect):
         self.angle = 0  # Ángulo inicial de las barras
 
     def draw(self, audio_data):
+        audio_data = audio_data.astype("int32")  # <-- Añade esta línea
         center_x, center_y = self.get_center_x(), self.get_center_y()
         angle_step = 2 * math.pi / self.config["num_bars"]
 

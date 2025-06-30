@@ -24,15 +24,24 @@ class SpectrumWave(Effect):
         num_points = self.config["num_points"]
         points = []
 
+        # Parámetros para la onda sinusoidal
+        amplitude = self.get_height() * 0.08  # Puedes ajustar la amplitud
+        frequency = 2 * np.pi / num_points    # 1 ciclo completo a lo largo de la línea
+        phase = pygame.time.get_ticks() * 0.002  # Animación suave
+
         for i in range(num_points):
             index = i * len(audio_data) // num_points
             x = i * self.get_width() // num_points
-            y = ((audio_data[index] + 32768) * self.get_height()) // 65536
+            # Onda de audio normalizada como antes
+            y_audio = ((audio_data[index] + 32768) * self.get_height()) // 65536
+            # Suma la modulación sinusoidal
+            y = int(y_audio + amplitude * np.sin(frequency * i + phase))
             points.append((x, y))
 
+        # Último punto al final de la pantalla
         x = self.get_width()
-        y = ((audio_data[index] + 32768) * self.get_height()) // 65536
-
+        y_audio = ((audio_data[index] + 32768) * self.get_height()) // 65536
+        y = int(y_audio + amplitude * np.sin(frequency * num_points + phase))
         points.append((x, y))
 
         color = self.random_color()

@@ -13,7 +13,7 @@ class AuroraBars(Effect):
             "num_bars": 64,
             "bar_width": 0,  # Calculado dinámicamente
             "max_bar_height": self.screen.get_height() * 0.8,
-            "color_speed": 0.2
+            "color_speed": 0.07  # Más lento
         }
         self.config_file = "Effects/configs/aurora_bars_config.json"
         self.load_config_from_file(self.config_file)
@@ -21,6 +21,9 @@ class AuroraBars(Effect):
         self.screen_height = self.screen.get_height()
         if self.config["bar_width"] <= 0:
             self.config["bar_width"] = self.screen_width // self.config["num_bars"]
+
+        # Inicializa las alturas suavizadas de las barras
+        self.smooth_heights = np.zeros(self.config["num_bars"])
 
     def draw(self, audio_data):
         freq_data = self.audio_manager.get_frequency_data(audio_data)
@@ -36,12 +39,20 @@ class AuroraBars(Effect):
         else:
             freq_data = np.zeros_like(freq_data)
 
+        # Suaviza la altura de cada barra (filtro exponencial)
+        smoothing = 0.15  # 0.0 = sin suavizado, 1.0 = muy lento
+        target_heights = freq_data * max_bar_height
+        self.smooth_heights = (
+            smoothing * target_heights + (1 - smoothing) * self.smooth_heights
+        )
+
+        # Color más lento y progresivo
         time_factor = pygame.time.get_ticks() * self.config["color_speed"] / 1000.0
 
         self.screen.fill((10, 10, 30))  # Fondo oscuro azulado
 
         for i in range(num_bars):
-            bar_height = int(freq_data[i] * max_bar_height)
+            bar_height = int(self.smooth_heights[i])
             # Gradiente de color tipo aurora usando HSV
             hue = (i / num_bars + time_factor) % 1.0
             rgb = colorsys.hsv_to_rgb(hue, 0.7, 1.0)

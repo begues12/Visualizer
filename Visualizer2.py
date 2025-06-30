@@ -5,6 +5,7 @@ import os
 import random
 import math
 import pygame.freetype
+import sys
 import psutil
 from Managers.particle_manager import ParticleManager
 from panel_control import ControlPanel
@@ -20,7 +21,12 @@ from Effects.rotation_circles import RotationCircles
 from Effects.circular_weave import CircularWeave
 from Effects.frequency_waterfall import FrequencyWaterfall
 from Effects.spinning_bars import SpinningBarsEffect
+from Effects.lightning_strike import LightningStrike
 from Effects.aurora_bars import AuroraBars
+from Effects.kaleidoscope import Kaleidoscope
+
+import inspect
+from Effects.effect import Effect
 
 class Visualizer:
     
@@ -47,7 +53,7 @@ class Visualizer:
     image_size = 1
     image_current_scale = 1
     current_function = None
-    change_mode = "static"  # Modo de cambio de efecto: "static", "random" o "sequential"
+    change_mode = "random"  # Modo de cambio de efecto: "static", "random" o "sequential"
     last_time = 0
     effect_duration = 10000  # Duración de cada efecto en milisegundos
     last_function_change_time = 0
@@ -65,23 +71,21 @@ class Visualizer:
     
     def __init__(self):
         pygame.init()
-        pygame.font.init()  # Initialize the pygame font module
-        pygame.freetype.init()  # Initialize the pygame FreeType library
+        pygame.font.init()
+        pygame.freetype.init()
         pygame.display.set_caption("Audio Visualizer")
         pygame.display.set_icon(pygame.image.load(self.image_path))
         self.clock = pygame.time.Clock()
         self.screen_info = pygame.display.Info()
 
-        actual_resolution = (self.screen_info.current_w, self.screen_info.current_h)
-       
+        display_flags = pygame.DOUBLEBUF | pygame.HWSURFACE | pygame.RESIZABLE
         if self.fullscreen:
-            self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
-        else:
-            self.screen = pygame.display.set_mode(self.actual_resolution)
-            
-        
+            display_flags |= pygame.FULLSCREEN
+        self.screen = pygame.display.set_mode(self.actual_resolution, display_flags)
+
         self.actual_resolution = (self.screen.get_width(), self.screen.get_height())
-       
+                
+           
         self.particle_manager = ParticleManager(self.max_particles, self.screen, self.actual_resolution[0], self.actual_resolution[1])
        
         self.center_x = self.actual_resolution[0] / 2
@@ -97,16 +101,13 @@ class Visualizer:
         
         
         # All drawing functions or classes
-        self.drawing_functions = [
-            SpectrumWave(self),
-            SpectrumSemicircles(self),
-            ShootingStars(self),
-            FrequencySpectrum(self),
-            BackgroundColor(self),
-            RotationCircles(self),
-            CircularWeave(self),
-            AuroraBars(self),
-        ]
+        self.drawing_functions = []
+        for name, obj in globals().items():
+            if inspect.isclass(obj) and issubclass(obj, Effect) and obj is not Effect:
+                try:
+                    self.drawing_functions.append(obj(self))
+                except Exception as e:
+                    print(f"Error instanciando {obj.__name__}: {e}")
 
         self.active_effects = list(self.drawing_functions)
 
@@ -120,44 +121,51 @@ class Visualizer:
         while self.running:
             self.clock.tick(self.fps)
 
-            # Procesa eventos de pygame (importante para evitar que la ventana se congele)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+                    
+                elif event.type == pygame.VIDEORESIZE:
+                    self.actual_resolution = (event.w, event.h)
+                    self.screen = pygame.display.set_mode(self.actual_resolution, pygame.RESIZABLE)
+                    self.onScreenChange()
 
-            # Obtén datos de audio y volumen una sola vez por iteración
             audio_data = self.audioManager.get_audio_data()
             volume = self.audioManager.get_volume(audio_data)
 
-            # Actualiza la pantalla y la imagen central
+            # Solo limpia la pantalla si el efecto no lo hace
             self.screen.fill((0, 0, 0))
 
-            # Ejecuta la función de dibujo actual si existe
+            # Dibuja solo si hay función activa
             if self.current_function and hasattr(self.current_function, 'draw'):
                 self.current_function.draw(audio_data)
 
+            # Solo dibuja la imagen central si está visible (puedes añadir un flag)
             self.center_image.draw(audio_data)
 
-            # Cambia la función de efecto según el tiempo y modo
+            # Cambia de efecto si corresponde
             current_time = pygame.time.get_ticks()
             if (current_time - self.last_function_change_time >= self.effect_duration and
                 self.change_mode != "static"):
                 self.current_function = self.next_effect()
                 self.last_function_change_time = current_time
 
-            # Manejo de partículas
-            self.particle_manager.move_particles(audio_data, volume, self.clock.get_time())
-            self.particle_manager.update_particles()
+            # Actualiza partículas solo si hay
+            if self.particle_manager:
+                self.particle_manager.move_particles(audio_data, volume, self.clock.get_time())
+                self.particle_manager.update_particles()
 
-            # Modo de depuración
             if self.debug_mode:
                 self.debug()
 
-            # Actualiza la pantalla
+            # Renderiza FPS solo si está en modo debug o si lo necesitas siempre
+            fps = self.clock.get_fps()
+            self.font.render_to(self.screen, (10, 10), f"FPS: {fps:.1f}", (0, 255, 0))
+
             pygame.display.flip()
 
-        # Limpieza final al terminar el bucle
         pygame.quit()
+        sys.exit()
 
     
     def get_screen(self):
@@ -179,10 +187,12 @@ class Visualizer:
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
         if self.fullscreen:
+            # Obtiene la resolución nativa del monitor principal
+            info = pygame.display.Info()
+            self.actual_resolution = (info.current_w, info.current_h)
             self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
         else:
             self.screen = pygame.display.set_mode(self.actual_resolution)
-            
         self.onScreenChange()
     
     def update_active_effects(self, active_effect_names):
@@ -205,21 +215,24 @@ class Visualizer:
          
     
     def onScreenChange(self):
-        #Calcula las nuevas posiciones centrales
+        # Calcula las nuevas posiciones centrales
         self.center_image.recalculate_center()
         self.center_x = self.actual_resolution[0] / 2 
         self.center_y = self.actual_resolution[1] / 2
-        self.current_function.on_screen_resize(self.actual_resolution[0], self.actual_resolution[1])
+        # Solo llama si el efecto tiene el método
+        if hasattr(self.current_function, "on_screen_resize"):
+            self.current_function.on_screen_resize(self.actual_resolution[0], self.actual_resolution[1])
 
         
-def run_visualizer(control_panel):
-    visualizer = control_panel.visualizer
+def run_visualizer(visualizer):
     visualizer.start()
         
 if __name__ == "__main__":
     visualizer = Visualizer()
-    control_panel = ControlPanel(visualizer)
-    control_panel_thread = Thread(target=control_panel.root.mainloop)
-    control_panel_thread.start()
-    visualizer.start()
+    # Lanza el visualizador en un hilo secundario
+    visualizer_thread = Thread(target=run_visualizer, args=(visualizer,))
+    visualizer_thread.start()
     
+    # Ejecuta el panel de control (Tkinter) en el hilo principal
+    control_panel = ControlPanel(visualizer)
+    control_panel.root.mainloop()

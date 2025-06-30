@@ -2,6 +2,8 @@ import pygame
 import random
 import math
 from Managers.particle_manager import ParticleManager
+import colorsys
+import time
 
 class StarManager:
     def __init__(self, max_particles, screen, width, height):
@@ -95,11 +97,12 @@ class StarManager:
             pygame.draw.circle(self.screen, self.tone_to_color(), (int(x), int(y)), size, 1)
 
     def draw_shooting_stars(self):
-        new_stars = []  # Lista para almacenar las estrellas que permanecen en la pantalla
+        new_stars = []
 
-        # Dibuja las bolas de gravedad si los puntos de gravedad están definidos
         if self.gravity_centers:
             self.draw_gravity_centers()
+
+        now = pygame.time.get_ticks() / 1000.0  # Tiempo en segundos
 
         for star in self.stars:
             x = int(star['x'])
@@ -107,35 +110,43 @@ class StarManager:
             brightness = star['brightness']
             size = star['size']
 
-            # Dibuja el rastro de estrellas
-            i = 0.7
-            for point in star['trail']:
-                px, py, color = point
-                pygame.draw.circle(self.screen, self.tone_to_color(), (px, py), int(size * i))
-                i += .2
-            # Dibuja la estrella actual
-            pygame.draw.circle(self.screen, self.tone_to_color(), (int(x), int(y)), int(size * i))
-
-            # Agrega la posición actual al rastro
-            star['trail'].append((x, y, self.tone_to_color()))
-
-            # Limita la longitud del rastro
-            if len(star['trail']) > 3:
+            # --- Dibuja el rastro con gradiente y color animado ---
+            trail_len = 18  # Rastro más largo y suave
+            star['trail'].append((x, y))
+            if len(star['trail']) > trail_len:
                 star['trail'].pop(0)
 
-            # Calcula el desplazamiento en función del ángulo
+            # Cada estrella tiene un desfase de color para que no sean todas iguales
+            color_offset = (now * 0.18 + size * 0.07) % 1.0
+
+            for idx, (px, py) in enumerate(star['trail']):
+                fade = idx / trail_len
+                # El color cambia a lo largo del rastro y con el tiempo
+                color = self.tone_to_color(brightness, fade, color_offset)
+                alpha = int(255 * (fade * 0.7 + 0.2))  # Más transparente al inicio
+                trail_surface = pygame.Surface((size*4, size*4), pygame.SRCALPHA)
+                pygame.draw.circle(trail_surface, color + (alpha,), (size*2, size*2), int(size * (0.7 + fade)))
+                self.screen.blit(trail_surface, (px - size*2, py - size*2), special_flags=pygame.BLEND_PREMULTIPLIED)
+
+            # --- Dibuja la estrella principal con halo animado ---
+            # El color del núcleo también evoluciona
+            core_color = self.tone_to_color(brightness, 1.0, color_offset)
+            halo_surface = pygame.Surface((size*7, size*7), pygame.SRCALPHA)
+            pygame.draw.circle(halo_surface, (255, 255, 255, 60), (size*3, size*3), int(size*2.8))
+            pygame.draw.circle(halo_surface, core_color + (180,), (size*3, size*3), int(size*1.5))
+            pygame.draw.circle(halo_surface, (255, 255, 255, 240), (size*3, size*3), int(size*0.8))
+            self.screen.blit(halo_surface, (x - size*3, y - size*3), special_flags=pygame.BLEND_PREMULTIPLIED)
+
+            # Movimiento y física igual que antes
             angle = star['angle']
             dx = math.cos(angle) * self.star_speed
             dy = math.sin(angle) * self.star_speed
 
-            # Aplica la gravedad si hay puntos de gravedad definidos
             for center in self.gravity_centers:
                 gx, gy, size = center['x'], center['y'], center['size']
                 dx_center = gx - x
                 dy_center = gy - y
                 distance_center = math.sqrt(dx_center ** 2 + dy_center ** 2)
-
-                # Evitar la división por cero
                 if distance_center > 0:
                     gravity_direction = math.atan2(dy_center, dx_center)
                     gravity_force = self.gravity_strength / distance_center
@@ -146,16 +157,17 @@ class StarManager:
             star['y'] += dy
             self.change_star_direction(star, math.atan2(dy, dx))
 
-            # Si la estrella sigue en la pantalla, guárdala en la lista de estrellas que permanecen
             if 0 <= x <= self.width and 0 <= y <= self.height:
                 new_stars.append(star)
 
-        # Reemplaza la lista de estrellas con las que permanecen en la pantalla
         self.stars[:] = new_stars
+
+    def tone_to_color(self, brightness=255, fade=1.0, color_offset=0.0):
+        # Color arcoíris animado: el tono evoluciona con el tiempo y el fade del rastro
+        hue = (color_offset + fade * 0.35) % 1.0
+        r, g, b = colorsys.hsv_to_rgb(hue, 0.7 + 0.3 * fade, 0.7 + 0.3 * fade)
+        return (int(r * brightness), int(g * brightness), int(b * brightness))
 
     def update_stars(self):
         if len(self.stars) < self.max_particles:  # Limita la cantidad de estrellas
             self.stars.append(self.create_star())
-
-    def tone_to_color(self):
-        return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
