@@ -81,3 +81,7 @@ class Kaleidoscope(Effect):
                 rot_points.append((rx, ry))
             # Dibuja la línea
             pygame.draw.aalines(screen, color, True, rot_points, blend=1)
+            
+    def on_screen_resize(self, width, height):
+        self.screen = self.visualizer.get_screen()
+        self.config["radius"] = min(width, height) // 2 - 20

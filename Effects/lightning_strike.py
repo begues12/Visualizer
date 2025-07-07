@@ -104,3 +104,7 @@ class LightningStrike(Effect):
             max(6, width * 2)
         )
         self.screen.blit(glow_surface, (0, 0), special_flags=pygame.BLEND_ADD)
+        
+    def on_screen_resize(self, width, height):
+        self.screen = self.visualizer.get_screen()
+        self.precompute_strikes()

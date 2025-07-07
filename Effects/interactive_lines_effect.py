@@ -31,3 +31,7 @@ class InteractiveLinesEffect(Effect):
 
         pygame.display.flip()  # Actualizar la pantalla
 
+    def on_screen_resize(self, width, height):
+        self.screen = self.visualizer.get_screen()
+        # Si dependes del número de líneas o ángulos, recalcula aquí:
+        self.line_angles = [i * (2 * math.pi / self.config["num_lines"]) for i in range(self.config["num_lines"])]

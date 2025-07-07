@@ -22,3 +22,8 @@ class ShootingStars(Effect):
         self.star_manager.draw_shooting_stars()
         self.star_manager.update_stars()
         self.star_manager.update_gravity_centers()
+        
+    def on_screen_resize(self, width, height):
+        self.star_manager.width = width
+        self.star_manager.height = height
+        self.star_manager.screen = self.visualizer.get_screen()

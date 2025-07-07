@@ -24,7 +24,8 @@ from Effects.spinning_bars import SpinningBarsEffect
 from Effects.lightning_strike import LightningStrike
 from Effects.aurora_bars import AuroraBars
 from Effects.kaleidoscope import Kaleidoscope
-
+import signal
+import sys
 import inspect
 from Effects.effect import Effect
 
@@ -37,7 +38,7 @@ class Visualizer:
 
     # Screen variables
     screen = None
-    actual_resolution = (1280, 720)
+    actual_resolution = (1920, 1080)
     center_x, center_y = actual_resolution[0] / 2, actual_resolution[1] / 2
     # 10 Types of resolutions 16:9
     resolutions = [ (640, 480), (800, 600), (960, 540), (1024, 576), (1280, 720), (1366, 768), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160) ]
@@ -187,12 +188,28 @@ class Visualizer:
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
         if self.fullscreen:
-            # Obtiene la resolución nativa del monitor principal
-            info = pygame.display.Info()
-            self.actual_resolution = (info.current_w, info.current_h)
+            # Usa la resolución nativa del primer monitor
+            native_res = pygame.display.get_desktop_sizes()[0]
+            self.windowed_resolution = self.actual_resolution
+            self.actual_resolution = native_res
             self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
         else:
-            self.screen = pygame.display.set_mode(self.actual_resolution)
+            if hasattr(self, "windowed_resolution"):
+                self.actual_resolution = self.windowed_resolution
+            self.screen = pygame.display.set_mode(self.actual_resolution, pygame.RESIZABLE)
+        self.onScreenChange()
+        
+    def change_screen(self, screen_num):
+        # Obtiene la resolución nativa del monitor destino
+        native_res = pygame.display.get_desktop_sizes()[screen_num]
+        self.actual_resolution = native_res
+        display_flags = pygame.DOUBLEBUF | pygame.HWSURFACE | pygame.RESIZABLE
+        if self.fullscreen:
+            display_flags |= pygame.FULLSCREEN
+        pygame.display.quit()
+        pygame.display.init()
+        pygame.display.set_mode(self.actual_resolution, display_flags, display=screen_num)
+        self.screen = pygame.display.get_surface()
         self.onScreenChange()
     
     def update_active_effects(self, active_effect_names):
@@ -226,8 +243,15 @@ class Visualizer:
         
 def run_visualizer(visualizer):
     visualizer.start()
-        
+    
+
+def signal_handler(sig, frame):
+    print("Cerrando visualizador...")
+    pygame.quit()
+    sys.exit(0)
+    
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal_handler)  # <-- Añade esto
     visualizer = Visualizer()
     # Lanza el visualizador en un hilo secundario
     visualizer_thread = Thread(target=run_visualizer, args=(visualizer,))

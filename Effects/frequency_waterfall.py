@@ -89,3 +89,10 @@ class FrequencyWaterfall(Effect):
             # Cambia el carácter de la cabeza de vez en cuando
             if random.random() < 0.08:
                 drop["char"] = self.random_char()
+                
+    def on_screen_resize(self, width, height):
+        self.width = width
+        self.height = height
+        self.screen = self.visualizer.get_screen()
+        self.font = pygame.font.SysFont("consolas", self.config["font_size"], bold=True)
+        self.reset_drops()

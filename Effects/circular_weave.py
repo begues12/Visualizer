@@ -25,3 +25,6 @@ class CircularWeave(Effect):
         radius = int(self.audio_manager.get_volume(audio_data) / 32768 * self.config["radius"])
         color = self.random_color()
         pygame.draw.ellipse(self.screen, color, (self.center_x - radius, self.center_y - radius, radius * 2, radius * 2))
+        
+    def on_screen_resize(self, width, height):
+        self.screen = self.visualizer.get_screen()

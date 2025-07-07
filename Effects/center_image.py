@@ -35,3 +35,6 @@ class CenterImage:
 
     def recalculate_center(self):
         self.center_x, self.center_y = self.visualizer.get_screen_center()
+        
+    def on_screen_resize(self, width, height):
+        self.center_x, self.center_y = self.visualizer.get_screen_center()

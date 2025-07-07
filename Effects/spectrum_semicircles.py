@@ -1,70 +1,112 @@
-from Effects.effect import Effect
 import pygame
 import numpy as np
 import colorsys
+import random
+import math
+from Effects.effect import Effect
 
 class SpectrumSemicircles(Effect):
     def __init__(self, visualizer):
-        super().__init__(
-            "Spectrum Semicircles",
-            visualizer,
-            visualizer.get_screen()
-        )
+        super().__init__("Audio Flames", visualizer, visualizer.get_screen())
         self.audio_manager = visualizer.get_audio_manager()
-        self.config = {
-            "num_semicircles": 5,
-            "max_radius": 200,
-            "min_radius": 60,
-            "arc_width_multiplier": 18,
-            "rotation_speed_multiplier": 0.18
-        }
-        self.config_file = "Effects/configs/spectrum_semicircles_config.json"
-        self.load_config_from_file(self.config_file)
-        # Un ángulo suavizado para cada semicírculo
-        self.smooth_angles = [0.0 for _ in range(self.config["num_semicircles"])]
+        self.screen = self.visualizer.get_screen()
+        self.phase = 0
+        self.num_flames = 8
+        self.base_positions = []
+        self.precalc_colors = []
+        self.last_size = (0, 0)
+        self._precalc_static()
 
+    def _precalc_static(self):
+        w, h = self.screen.get_size()
+        self.base_positions = [int((i + 1) * w // (self.num_flames + 1)) for i in range(self.num_flames)]
+        # Precalcula gradientes de color para lenguas secundarias
+        self.precalc_colors = []
+        for rel in np.linspace(0, 1, 10):
+            hue = 0.09 - 0.06 * rel
+            sat = 1.0
+            val = 1.0 - 0.2 * rel
+            color = tuple(int(c * 255) for c in colorsys.hsv_to_rgb(hue, sat, val))
+            self.precalc_colors.append(color)
+        self.last_size = (w, h)
+
+    def bezier_curve(self, points, steps=8):
+        n = len(points) - 1
+        result = []
+        for t in np.linspace(0, 1, steps):
+            x = 0
+            y = 0
+            for i, (px, py) in enumerate(points):
+                bern = math.comb(n, i) * (t ** i) * ((1 - t) ** (n - i))
+                x += px * bern
+                y += py * bern
+            result.append((int(x), int(y)))
+        return result
+    
+    
     def draw(self, audio_data):
-        screen = self.visualizer.screen
-        center_x, center_y = self.get_center_x(), self.get_center_y()
-        num_semicircles = self.config["num_semicircles"]
-        min_radius = self.config["min_radius"]
-        max_radius = self.config["max_radius"]
+        screen = self.visualizer.get_screen()
+        w, h = screen.get_size()
+        if (w, h) != self.last_size:
+            self._precalc_static()
 
-        # Fondo semitransparente para trailing suave
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 38))
+        volume = min(self.audio_manager.get_volume(audio_data) / 32768, 1.0)
+        freq_data = self.audio_manager.get_frequency_data()
+        bass = np.mean(freq_data[:len(freq_data)//8]) if len(freq_data) > 0 else 0
+
+        overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 36))
         screen.blit(overlay, (0, 0))
 
-        # Volumen normalizado
-        volume_level = min(self.audio_manager.get_volume(audio_data) / 32768, 1.0)
+        flame_width = w // (self.num_flames + 1)
+        t = pygame.time.get_ticks() * 0.002
+        base_y = h - 8
 
-        # Ángulo base objetivo animado
-        time = pygame.time.get_ticks() / 1000.0
-        base_angle = time * self.config["rotation_speed_multiplier"] * (0.5 + volume_level)
+        rand_offsets = [random.random() for _ in range(self.num_flames)]
+        rand_ints = [random.randint(0, 10) for _ in range(self.num_flames)]
 
-        smoothing = 0.12  # Suavizado exponencial
+        bezier = self.bezier_curve
 
-        for i in range(num_semicircles):
-            t = i / max(num_semicircles - 1, 1)
-            # Cada semicírculo tiene su propio ángulo objetivo, repartido en el círculo
-            target_angle = base_angle + t * 2 * np.pi
-            # Suaviza el ángulo de cada semicírculo
-            self.smooth_angles[i] += (target_angle - self.smooth_angles[i]) * smoothing
+        for i, x in enumerate(self.base_positions):
+            base_height = (0.18 + 0.82 * volume) * h * (0.7 + 0.3 * np.sin(t + i * 0.7))
+            flame_height = int(base_height * (0.85 + 0.3 * rand_offsets[i]))
 
-            # El radio varía con el volumen y la posición
-            radius = int(min_radius + t * (max_radius - min_radius) * (0.7 + 0.7 * volume_level))
+            tip = (x, base_y - flame_height - rand_ints[i])
+            left_base = (x - flame_width // 2, base_y)
+            right_base = (x + flame_width // 2, base_y)
+            ctrl1 = (x - flame_width // 3, base_y - int(flame_height * 0.5))
+            ctrl2 = (x + flame_width // 3, base_y - int(flame_height * 0.5))
 
-            # Color según el ángulo (tono arcoíris)
-            hue = (t + self.smooth_angles[i] * 0.15 + time * 0.08) % 1.0
-            rgb = colorsys.hsv_to_rgb(hue, 0.8, 1.0)
-            color = (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+            color_center = (80, 180, 255) if volume > 0.92 else (255, 255, 180)
+            curve_left = bezier([left_base, ctrl1, tip], steps=8)
+            curve_right = bezier([tip, ctrl2, right_base], steps=8)
+            points = curve_left + curve_right
+            pygame.draw.polygon(screen, color_center, points)
 
-            # Ángulos de inicio y fin para cada semicírculo, apuntando en direcciones diferentes
-            start_angle = self.smooth_angles[i]
-            end_angle = start_angle + np.pi
+            # Lenguas secundarias
+            num_tongues = 2
+            tongue_rand_offsets = [random.random() for _ in range(num_tongues)]
+            tongue_rand_ints = [random.randint(0, 8) for _ in range(num_tongues)]
+            for j in range(num_tongues):
+                rel = (j + 1) / (num_tongues + 1)
+                tongue_height = int(flame_height * (0.5 + 0.4 * rel + 0.1 * tongue_rand_offsets[j]))
+                tongue_tip = (
+                    x + random.randint(-flame_width // 3, flame_width // 3),
+                    base_y - tongue_height - tongue_rand_ints[j]
+                )
+                tongue_left = (x - int(flame_width * 0.4 * (1 - rel)), base_y)
+                tongue_right = (x + int(flame_width * 0.4 * (1 - rel)), base_y)
+                ctrl1 = (tongue_left[0] + flame_width // 6, base_y - int(tongue_height * 0.5))
+                ctrl2 = (tongue_right[0] - flame_width // 6, base_y - int(tongue_height * 0.5))
 
-            # Grosor del arco suavizado por el volumen
-            arc_width = max(3, int(3 + volume_level * self.config["arc_width_multiplier"]))
+                # Usa color precalculado
+                if volume > 0.92:
+                    color = (80, 180, 255)
+                else:
+                    idx = min(int(rel * (len(self.precalc_colors) - 1)), len(self.precalc_colors) - 1)
+                    color = self.precalc_colors[idx]
 
-            rect = (center_x - radius, center_y - radius, 2 * radius, 2 * radius)
-            pygame.draw.arc(screen, color, rect, start_angle, end_angle, arc_width)
+                tongue_curve_left = bezier([tongue_left, ctrl1, tongue_tip], steps=5)
+                tongue_curve_right = bezier([tongue_tip, ctrl2, tongue_right], steps=5)
+                tongue_points = tongue_curve_left + tongue_curve_right
+                pygame.draw.polygon(screen, color, tongue_points)

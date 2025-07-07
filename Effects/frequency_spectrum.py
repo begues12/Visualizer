@@ -36,3 +36,7 @@ class FrequencySpectrum(Effect):
             pygame.draw.rect(self.screen, self.colors[i], rect)
 
         self.phase += 0.05  # Increment phase
+
+    def on_screen_resize(self, width, height):
+        self.screen = self.visualizer.get_screen()
+        self.screen_width = width

@@ -26,3 +26,6 @@ class BackgroundColor(Effect):
             color = (0, 0, 0)  
 
         self.screen.fill(color)
+        
+    def on_screen_resize(self, width, height):
+        self.screen = self.visualizer.get_screen()

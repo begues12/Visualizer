@@ -47,3 +47,6 @@ class SpectrumWave(Effect):
         color = self.random_color()
         for i in range(1, len(points)):
             pygame.draw.line(self.visualizer.screen, color, points[i - 1], points[i], line_width)
+
+    def on_screen_resize(self, width, height):
+        self.screen = self.visualizer.get_screen()

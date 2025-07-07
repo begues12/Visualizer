@@ -60,3 +60,12 @@ class AuroraBars(Effect):
             x = i * bar_width
             y = base_y - bar_height
             pygame.draw.rect(self.screen, color, (x, y, bar_width - 2, bar_height), border_radius=bar_width // 3)
+            
+    def on_screen_resize(self, width, height):
+        self.screen = self.visualizer.get_screen()
+        self.screen_width = width
+        self.screen_height = height
+        self.config["max_bar_height"] = self.screen_height * 0.8
+        if self.config["bar_width"] <= 0:
+            self.config["bar_width"] = self.screen_width // self.config["num_bars"]
+        self.smooth_heights = np.zeros(self.config["num_bars"])
