@@ -46,17 +46,22 @@ class Kaleidoscope(Effect):
         max_volume = getattr(self.visualizer.audioManager, "max_volume", 32768)
         volume_norm = min(volume / max_volume, 1.0)
 
-        # Animación de rotación (más lento y sensible al volumen)
-        time = pygame.time.get_ticks() * 0.00018  # Más lento (antes 0.0005)
-        angle_offset = time * (0.5 + volume_norm * 1.5)  # Gira más rápido si hay más volumen
+        freq_data = self.visualizer.audioManager.get_frequency_data(audio_data)
+        bass = np.mean(freq_data[:len(freq_data)//8]) if len(freq_data) > 0 else 0
+        bass_norm = min(bass / (np.max(freq_data) + 1e-6), 1.0) if len(freq_data) > 0 else 0
 
-        # Calcula los puntos de la onda base (radio reacciona al volumen)
+        # Animación de rotación (más lento y sensible al volumen)
+        time = pygame.time.get_ticks() * 0.00018
+        angle_offset = time * (0.5 + volume_norm * 1.5)
+
+        # Calcula los puntos de la onda base (radio reacciona al volumen, agitación al bajo)
         points = []
         for i in range(num_points):
             idx = i * len(smooth_audio) // num_points
             angle = 2 * math.pi * i / num_points
-            # El radio base crece con el volumen
-            radius = base_radius * (0.6 + 0.25 * smooth_audio[idx] + 0.25 * volume_norm)
+            # El radio base crece con el volumen, la agitación depende del bajo
+            agitation = 1 + 0.45 * bass_norm * math.sin(8 * angle + time * 8)
+            radius = base_radius * (0.6 + 0.25 * smooth_audio[idx] + 0.25 * volume_norm) * agitation
             x = center_x + radius * math.cos(angle)
             y = center_y + radius * math.sin(angle)
             points.append((x, y))

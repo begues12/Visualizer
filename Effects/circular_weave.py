@@ -15,7 +15,7 @@ class CircularWeave(Effect):
         self.audio_manager = visualizer.get_audio_manager()
         self.screen = visualizer.get_screen()
         self.config = {
-            "radius": 150,
+            "radius": self.screen.get_height(),
         }
         self.config_file = "Effects/configs/circular_weave_config.json"
         self.load_config_from_file(self.config_file)

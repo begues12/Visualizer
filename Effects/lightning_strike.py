@@ -26,9 +26,21 @@ class LightningStrike(Effect):
             self.precomputed_strikes.append(self.generate_strike())
 
     def draw(self, audio_data):
+        # --- NUEVO: Calcula el bass ---
+        freq_data = self.visualizer.audioManager.get_frequency_data(audio_data)
+        bass = np.mean(freq_data[:len(freq_data)//8]) if len(freq_data) > 0 else 0
+        bass_norm = min(bass / (np.max(freq_data) + 1e-6), 1.0) if len(freq_data) > 0 else 0
+
         volume = self.visualizer.audioManager.get_volume(audio_data)
         max_volume = getattr(self.visualizer.audioManager, "max_volume", 32768)
         volume_norm = min(volume / max_volume, 1.0)
+
+        # --- FONDO BLANCO SI EL BASS ES ALTO ---
+        if bass_norm > 0.18:
+            overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+            alpha = int(120 * min(1.0, bass_norm * 2))  # Más bass, más blanco
+            overlay.fill((255, 255, 255, alpha))
+            self.screen.blit(overlay, (0, 0), special_flags=pygame.BLEND_ADD)
 
         now = pygame.time.get_ticks()
         if (now - self.last_strike_time > self.cooldown
@@ -104,7 +116,3 @@ class LightningStrike(Effect):
             max(6, width * 2)
         )
         self.screen.blit(glow_surface, (0, 0), special_flags=pygame.BLEND_ADD)
-        
-    def on_screen_resize(self, width, height):
-        self.screen = self.visualizer.get_screen()
-        self.precompute_strikes()

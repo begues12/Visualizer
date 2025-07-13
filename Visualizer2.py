@@ -24,6 +24,7 @@ from Effects.spinning_bars import SpinningBarsEffect
 from Effects.lightning_strike import LightningStrike
 from Effects.aurora_bars import AuroraBars
 from Effects.kaleidoscope import Kaleidoscope
+from Effects.character import RotatingMandala
 import signal
 import sys
 import inspect
