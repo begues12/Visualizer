@@ -1,3 +1,7 @@
 {
+    "base_radius": 100,
+    "max_radius": 200,
+    "num_particles": 12,
+    "num_rings": 2,
     "num_bands": 20
 }

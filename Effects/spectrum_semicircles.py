@@ -54,9 +54,28 @@ class SpectrumSemicircles(Effect):
         freq_data = self.audio_manager.get_frequency_data()
         bass = np.mean(freq_data[:len(freq_data)//8]) if len(freq_data) > 0 else 0
 
-        overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 36))
-        screen.blit(overlay, (0, 0))
+        # Efecto de parpadeo rojo cuando las llamas son azules (volumen alto)
+        if volume > 0.75:  # Reducido de 0.92 a 0.75 para mayor reactividad
+            # Parpadeo rápido basado en el tiempo
+            flash_time = pygame.time.get_ticks() * 0.015  # Velocidad del parpadeo
+            flash_intensity = (math.sin(flash_time) + 1) * 0.5  # Valor entre 0 y 1
+            flash_alpha = int(flash_intensity * 120 + 30)  # Alpha entre 30 y 150
+            
+            # Crear overlay rojo parpadeante
+            red_overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+            red_color = (255, 50, 50, flash_alpha)  # Rojo con alpha variable
+            red_overlay.fill(red_color)
+            screen.blit(red_overlay, (0, 0))
+            
+            # Overlay normal más tenue para no opacar el efecto rojo
+            overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 20))
+            screen.blit(overlay, (0, 0))
+        else:
+            # Overlay normal cuando no hay parpadeo
+            overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 36))
+            screen.blit(overlay, (0, 0))
 
         flame_width = w // (self.num_flames + 1)
         t = pygame.time.get_ticks() * 0.002
@@ -77,7 +96,7 @@ class SpectrumSemicircles(Effect):
             ctrl1 = (x - flame_width // 3, base_y - int(flame_height * 0.5))
             ctrl2 = (x + flame_width // 3, base_y - int(flame_height * 0.5))
 
-            color_center = (80, 180, 255) if volume > 0.92 else (255, 255, 180)
+            color_center = (80, 180, 255) if volume > 0.75 else (255, 255, 180)  # Reducido umbral para mayor reactividad
             curve_left = bezier([left_base, ctrl1, tip], steps=8)
             curve_right = bezier([tip, ctrl2, right_base], steps=8)
             points = curve_left + curve_right
@@ -100,7 +119,7 @@ class SpectrumSemicircles(Effect):
                 ctrl2 = (tongue_right[0] - flame_width // 6, base_y - int(tongue_height * 0.5))
 
                 # Usa color precalculado
-                if volume > 0.92:
+                if volume > 0.75:  # Reducido umbral para mayor reactividad
                     color = (80, 180, 255)
                 else:
                     idx = min(int(rel * (len(self.precalc_colors) - 1)), len(self.precalc_colors) - 1)

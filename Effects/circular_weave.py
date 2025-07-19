@@ -16,15 +16,35 @@ class CircularWeave(Effect):
         self.screen = visualizer.get_screen()
         self.config = {
             "radius": self.screen.get_height(),
+            "max_radius": self.screen.get_height()
         }
         self.config_file = "Effects/configs/circular_weave_config.json"
         self.load_config_from_file(self.config_file)
         
+        # Asegurar que max_radius existe después de cargar la configuración
+        if "max_radius" not in self.config:
+            self.config["max_radius"] = self.screen.get_height() // 2
+        
         
     def draw(self, audio_data):
-        radius = int(self.audio_manager.get_volume(audio_data) / 32768 * self.config["radius"])
+        # Obtener volumen normalizado (0.0 a 1.0)
+        volume = self.audio_manager.get_volume(audio_data)
+        volume_normalized = min(1.0, volume / 32768.0)
+        
+        # Calcular el radio máximo que ocupe BASTANTE de la pantalla
+        screen_width = self.screen.get_width()
+        screen_height = self.screen.get_height()
+        # Usar el 80% de la pantalla para que se vea mucho más grande
+        max_screen_radius = int(min(screen_width, screen_height) * 0.8)  # 80% del radio total
+        
+        # Escalar el radio desde un mínimo hasta el máximo grande
+        min_radius = 50  # Radio mínimo más grande para mejor visibilidad
+        radius = int(min_radius + (volume_normalized * (max_screen_radius - min_radius)))
+        
+        # Dibujar círculo que ocupa bastante pantalla y RELLENADO
         color = self.random_color()
-        pygame.draw.ellipse(self.screen, color, (self.center_x - radius, self.center_y - radius, radius * 2, radius * 2))
+        pygame.draw.circle(self.screen, color, (self.center_x, self.center_y), radius)  # Sin grosor = rellenado
         
     def on_screen_resize(self, width, height):
         self.screen = self.visualizer.get_screen()
+        self.config["max_radius"] = height // 2

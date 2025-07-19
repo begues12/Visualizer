@@ -24,7 +24,7 @@ from Effects.spinning_bars import SpinningBarsEffect
 from Effects.lightning_strike import LightningStrike
 from Effects.aurora_bars import AuroraBars
 from Effects.kaleidoscope import Kaleidoscope
-from Effects.character import RotatingMandala
+from Effects.character import FluidFrequencyVisualizer
 import signal
 import sys
 import inspect
@@ -55,9 +55,9 @@ class Visualizer:
     image_size = 1
     image_current_scale = 1
     current_function = None
-    change_mode = "random"  # Modo de cambio de efecto: "static", "random" o "sequential"
+    change_mode = "static"  # Modo de cambio de efecto: "static", "random" o "sequential"
     last_time = 0
-    effect_duration = 10000  # Duración de cada efecto en milisegundos
+    effect_duration = 15000  # Duración de cada efecto en milisegundos
     last_function_change_time = 0
     
     
@@ -142,6 +142,7 @@ class Visualizer:
             if self.current_function and hasattr(self.current_function, 'draw'):
                 self.current_function.draw(audio_data)
 
+            
             # Solo dibuja la imagen central si está visible (puedes añadir un flag)
             self.center_image.draw(audio_data)
 
@@ -151,6 +152,7 @@ class Visualizer:
                 self.change_mode != "static"):
                 self.current_function = self.next_effect()
                 self.last_function_change_time = current_time
+                print(f"Cambiando a efecto: {self.current_function.get_effect_name()}")
 
             # Actualiza partículas solo si hay
             if self.particle_manager:
