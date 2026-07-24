@@ -8,8 +8,7 @@ import pygame.freetype
 import sys
 import psutil
 from Managers.particle_manager import ParticleManager
-from panel_control import ControlPanel
-from threading import Thread
+from threading import Thread, Lock
 from Managers.audio_manager import AudioManager
 from Effects.center_image import CenterImage
 from Effects.spectrum_wave import SpectrumWave
@@ -39,10 +38,10 @@ class Visualizer:
 
     # Screen variables
     screen = None
-    actual_resolution = (1920, 1080)
+    actual_resolution = (960, 540)  # Ventana pequena por defecto (configurable desde web)
     center_x, center_y = actual_resolution[0] / 2, actual_resolution[1] / 2
-    # 10 Types of resolutions 16:9
-    resolutions = [ (640, 480), (800, 600), (960, 540), (1024, 576), (1280, 720), (1366, 768), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160) ]
+    # Resoluciones 16:9 (de pequena a grande)
+    resolutions = [ (480, 270), (640, 360), (854, 480), (960, 540), (1280, 720), (1366, 768), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160) ]
     fps = 60
     fullscreen = False
     
@@ -79,6 +78,11 @@ class Visualizer:
         pygame.display.set_icon(pygame.image.load(self.image_path))
         self.clock = pygame.time.Clock()
         self.screen_info = pygame.display.Info()
+
+        # Cola de acciones que deben ejecutarse dentro del hilo de render
+        # (p. ej. cambios de pantalla lanzados desde el panel web).
+        self.pending_actions = []
+        self.actions_lock = Lock()
 
         display_flags = pygame.DOUBLEBUF | pygame.HWSURFACE | pygame.RESIZABLE
         if self.fullscreen:
@@ -122,6 +126,8 @@ class Visualizer:
     def start(self):
         while self.running:
             self.clock.tick(self.fps)
+
+            self._drain_actions()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -172,6 +178,21 @@ class Visualizer:
         sys.exit()
 
     
+    def enqueue(self, fn):
+        """Encola una accion para ejecutarla dentro del hilo de render."""
+        with self.actions_lock:
+            self.pending_actions.append(fn)
+
+    def _drain_actions(self):
+        with self.actions_lock:
+            actions = self.pending_actions
+            self.pending_actions = []
+        for fn in actions:
+            try:
+                fn()
+            except Exception as e:
+                print(f"[action] Error ejecutando accion: {e}")
+
     def get_screen(self):
         return self.screen
     
@@ -186,6 +207,12 @@ class Visualizer:
 
     def change_resolution(self, width, height):
         self.actual_resolution = (width, height)
+        display_flags = pygame.DOUBLEBUF | pygame.HWSURFACE | pygame.RESIZABLE
+        if self.fullscreen:
+            display_flags |= pygame.FULLSCREEN
+        self.screen = pygame.display.set_mode(self.actual_resolution, display_flags)
+        if self.particle_manager:
+            self.particle_manager.onScreenResize(width, height)
         self.onScreenChange()
         
     def toggle_fullscreen(self):
@@ -237,11 +264,12 @@ class Visualizer:
     def onScreenChange(self):
         # Calcula las nuevas posiciones centrales
         self.center_image.recalculate_center()
-        self.center_x = self.actual_resolution[0] / 2 
+        self.center_x = self.actual_resolution[0] / 2
         self.center_y = self.actual_resolution[1] / 2
-        # Solo llama si el efecto tiene el método
-        if hasattr(self.current_function, "on_screen_resize"):
-            self.current_function.on_screen_resize(self.actual_resolution[0], self.actual_resolution[1])
+        # Actualiza TODOS los efectos para que no queden con tamaño/superficie obsoletos
+        for effect in self.drawing_functions:
+            if hasattr(effect, "on_screen_resize"):
+                effect.on_screen_resize(self.actual_resolution[0], self.actual_resolution[1])
 
         
 def run_visualizer(visualizer):
@@ -254,12 +282,13 @@ def signal_handler(sig, frame):
     sys.exit(0)
     
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, signal_handler)  # <-- Añade esto
+    signal.signal(signal.SIGINT, signal_handler)
     visualizer = Visualizer()
-    # Lanza el visualizador en un hilo secundario
-    visualizer_thread = Thread(target=run_visualizer, args=(visualizer,))
-    visualizer_thread.start()
-    
-    # Ejecuta el panel de control (Tkinter) en el hilo principal
-    control_panel = ControlPanel(visualizer)
-    control_panel.root.mainloop()
+
+    # El servidor web corre en un hilo de fondo (abre http://localhost:5000).
+    from web_control_panel import WebControlPanel
+    panel = WebControlPanel(visualizer)
+    Thread(target=panel.run, daemon=True).start()
+
+    # pygame DEBE correr en el hilo principal para que su ventana no se cuelgue.
+    visualizer.start()

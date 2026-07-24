@@ -70,9 +70,10 @@ class Effect:
     def get_config_file(self):
         return self.config_file
     
-    def save_config_to_file(self, file_path):
-        with open(self.config_file, 'w') as file:
-            json.dump(self.config_file, file)
+    def save_config_to_file(self, file_path=None):
+        path = file_path or self.config_file
+        with open(path, 'w') as file:
+            json.dump(self.config, file, indent=4)
     
     def load_config_from_file(self, file_path):
         self.check_config(self.config_file)

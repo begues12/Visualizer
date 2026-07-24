@@ -66,7 +66,9 @@ class ParticleManager:
         for particle in particles_to_remove:
             self.particles.remove(particle)
 
-    def update_particles(self, max_particles=40):
+    def update_particles(self, max_particles=None):
+        if max_particles is None:
+            max_particles = self.max_particles
         if len(self.particles) < max_particles:  # Limita la cantidad de partículas
             for _ in range(5):  # Crea nuevas partículas de forma periódica (menos partículas)
                 x = random.randint(0, self.width)
