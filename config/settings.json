@@ -1,8 +1,8 @@
 {
     "mode": "static",
     "duration": 5000.0,
-    "sensitivity": 1.35,
-    "current": "Audio Flames",
+    "sensitivity": 4.45,
+    "current": "Lightning Strike",
     "active": [
         "Spectrum Wave",
         "Audio Flames",
@@ -34,7 +34,7 @@
         1920,
         1009
     ],
-    "fps": 60,
+    "fps": 30,
     "center": {
         "max_scale": 2.0,
         "speed": 0.5,

@@ -21,6 +21,7 @@ class LightningStrike(Effect):
             "flash_intensity": 170, # brillo del destello de trueno (0-255)
             "bolt_width": 3,        # grosor del rayo
             "num_branches": 2,      # ramificaciones por rayo
+            "speed": 10.0            # velocidad de animacion
         }
         self.config_meta = {
             "sensitivity": {"min": 1.0, "max": 3.0, "step": 0.05, "label": "Sensibilidad al golpe"},
@@ -29,6 +30,7 @@ class LightningStrike(Effect):
             "flash_intensity": {"min": 0, "max": 255, "step": 5, "label": "Destello de trueno"},
             "bolt_width": {"min": 1, "max": 10, "step": 1, "label": "Grosor del rayo"},
             "num_branches": {"min": 0, "max": 6, "step": 1, "label": "Ramificaciones"},
+            "speed": {"min": 0.1, "max": 3000.0, "step": 0.1, "label": "Velocidad de animacion"},
         }
         self.config_file = "Effects/configs/lightning_strike_config.json"
         self.load_config_from_file(self.config_file)
@@ -73,7 +75,7 @@ class LightningStrike(Effect):
                 "bolts": bolts,
                 "phase": "fall",            # cae -> impacta
                 "progress": 1.0,
-                "fall_speed": max(1.0, n / 13.0),  # desciende visible (~13 frames)
+                "fall_speed": self.config["speed"] * n / 1000.0,  # px/ms
                 "brightness": 255,
                 "strength": strength,
             })
@@ -132,9 +134,6 @@ class LightningStrike(Effect):
         gr = max(2, int(radius))
         f = max(0.0, min(1.0, brightness / 255.0))
         glow = pygame.Surface((gr * 2, gr * 2), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (int(90 * f), int(140 * f), int(230 * f)), (gr, gr), gr)
-        pygame.draw.circle(glow, (int(200 * f), int(225 * f), int(255 * f)), (gr, gr), max(2, gr // 2))
-        pygame.draw.circle(glow, (int(255 * f), int(255 * f), int(255 * f)), (gr, gr), max(1, gr // 4))
         self.screen.blit(glow, (int(point[0] - gr), int(point[1] - gr)), special_flags=pygame.BLEND_ADD)
 
     # ------------------------------------------------------------ geometria
@@ -151,7 +150,7 @@ class LightningStrike(Effect):
             if n < 5:
                 break
             i = random.randint(2, n - 3)
-            bx, by = main[i]
+            bx, by = main[i]  
             branch_len = random.randint(int(h * 0.12), int(h * 0.34))
             branch = self._bolt_path(bx, by, min(h, by + branch_len), segments=9, spread=1.7)
             bolts.append(branch)

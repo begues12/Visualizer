@@ -1,1 +1,9 @@
-{"sensitivity": 1.5, "cooldown": 110, "max_strikes": 6, "flash_intensity": 170, "bolt_width": 3, "num_branches": 2}
+{
+    "sensitivity": 2.6,
+    "cooldown": 430,
+    "max_strikes": 16,
+    "flash_intensity": 255,
+    "bolt_width": 1,
+    "num_branches": 2,
+    "speed": 2992.6
+}
