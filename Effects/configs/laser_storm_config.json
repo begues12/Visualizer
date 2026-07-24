@@ -1,1 +1,8 @@
-{}
+{
+    "sensitivity": 1.05,
+    "num_beams": 5,
+    "beam_width": 2,
+    "rotation_speed": 0.2,
+    "flash": 15,
+    "glow": 0.1
+}

@@ -1,8 +1,8 @@
 {
     "mode": "static",
-    "duration": 15000.0,
-    "sensitivity": 5.0,
-    "current": "Shockwave",
+    "duration": 5000.0,
+    "sensitivity": 1.35,
+    "current": "Audio Flames",
     "active": [
         "Spectrum Wave",
         "Audio Flames",
@@ -16,7 +16,13 @@
         "Lightning Strike",
         "Aurora Bars",
         "Kaleidoscope",
-        "Fluid Frequency"
+        "Fluid Frequency",
+        "Shockwave",
+        "Laser Storm",
+        "Concert Lasers",
+        "Strobe Glitch",
+        "Hyper Tunnel",
+        "Bass Shards"
     ],
     "particles": {
         "max": 50,
@@ -25,7 +31,14 @@
     },
     "device": 2,
     "resolution": [
-        960,
-        540
-    ]
+        1920,
+        1009
+    ],
+    "fps": 60,
+    "center": {
+        "max_scale": 2.0,
+        "speed": 0.5,
+        "size": 0.95,
+        "image": "ntk.png"
+    }
 }

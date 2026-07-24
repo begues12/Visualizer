@@ -40,6 +40,28 @@ class WebControlPanel:
                 return e
         return None
 
+    def _images_dir(self):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
+
+    def _list_images(self):
+        folder = self._images_dir()
+        os.makedirs(folder, exist_ok=True)
+        names = [f for f in os.listdir(folder)
+                 if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp"))]
+        # Incluye el logo por defecto de la raiz si no esta ya
+        default = "logo2.png"
+        if default not in names and os.path.exists(
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), default)):
+            names.insert(0, default)
+        return sorted(set(names))
+
+    def _image_path(self, name):
+        base = os.path.dirname(os.path.abspath(__file__))
+        p = os.path.join(self._images_dir(), name)
+        if not os.path.exists(p):
+            p = os.path.join(base, name)  # p. ej. logo2.png en la raiz
+        return p
+
     # ---------------------------------------------------- persistencia global
     def capture_settings(self):
         v = self.visualizer
@@ -57,6 +79,12 @@ class WebControlPanel:
             "device": v.audioManager.get_device_index(),
             "resolution": [v.actual_resolution[0], v.actual_resolution[1]],
             "fps": getattr(v, "fps", 60),
+            "center": {
+                "max_scale": v.center_image.max_scale,
+                "speed": v.center_image.scale_change_speed,
+                "size": getattr(v.center_image, "base_size", 1.0),
+                "image": getattr(v.center_image, "image_name", "logo2.png"),
+            },
         }
 
     def save_settings(self):
@@ -109,6 +137,19 @@ class WebControlPanel:
                     pass
             if data.get("fps"):
                 v.fps = int(data["fps"])
+            c = data.get("center", {})
+            if c:
+                if "max_scale" in c:
+                    v.center_image.set_max_scale(c["max_scale"])
+                if "speed" in c:
+                    v.center_image.set_speed(c["speed"])
+                if "size" in c:
+                    v.center_image.set_base_size(c["size"])
+                if c.get("image"):
+                    try:
+                        v.enqueue(lambda p=self._image_path(c["image"]): v.center_image.set_image_by_path(p))
+                    except Exception:
+                        pass
             if data.get("resolution"):
                 w, h = int(data["resolution"][0]), int(data["resolution"][1])
                 v.enqueue(lambda: v.change_resolution(w, h))
@@ -160,6 +201,13 @@ class WebControlPanel:
             "resolutions": [f"{r[0]}x{r[1]}" for r in v.resolutions],
             "screens": pygame.display.get_num_displays(),
             "fps": getattr(v, "fps", 60),
+            "center": {
+                "max_scale": v.center_image.max_scale,
+                "speed": v.center_image.scale_change_speed,
+                "size": getattr(v.center_image, "base_size", 1.0),
+                "image": getattr(v.center_image, "image_name", "logo2.png"),
+                "images": self._list_images(),
+            },
         }
 
     def _debug(self):
@@ -328,6 +376,23 @@ class WebControlPanel:
             self.save_settings()
             return jsonify(ok=True, fps=v.fps)
 
+        @app.route("/api/center", methods=["POST"])
+        def set_center():
+            data = request.json
+            ci = v.center_image
+            if "max_scale" in data:
+                ci.set_max_scale(data["max_scale"])
+            if "speed" in data:
+                ci.set_speed(data["speed"])
+            if "size" in data:
+                ci.set_base_size(data["size"])
+            if data.get("image"):
+                path = self._image_path(data["image"])
+                # La carga toca superficies de pygame -> hazla en el hilo de render
+                v.enqueue(lambda p=path: ci.set_image_by_path(p))
+            self.save_settings()
+            return jsonify(ok=True)
+
     # ------------------------------------------------------------------ run
     def _lan_ip(self):
         import socket
@@ -344,7 +409,17 @@ class WebControlPanel:
         lan = self._lan_ip()
         print(f"[WebControlPanel] En este PC:  http://localhost:{self.port}")
         print(f"[WebControlPanel] En el movil: http://{lan}:{self.port}  (misma red Wi-Fi)")
-        threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{self.port}")).start()
+
+        # Abre el navegador salvo en modo headless (Raspberry Pi sin escritorio):
+        # exporta VISUALIZER_NO_BROWSER=1 para desactivarlo.
+        if not os.environ.get("VISUALIZER_NO_BROWSER"):
+            def _open():
+                try:
+                    webbrowser.open(f"http://localhost:{self.port}")
+                except Exception:
+                    pass
+            threading.Timer(1.0, _open).start()
+
         self.app.run(host=self.host, port=self.port, debug=False,
                      use_reloader=False, threaded=True)
 
@@ -472,6 +547,19 @@ PAGE = r"""<!doctype html>
       <input type="range" id="p-size" min="1" max="100" step="1"></div>
   </div>
 
+  <div class="card">
+    <h2>Imagen central</h2>
+    <label>Imagen</label>
+    <select id="ci-image"></select>
+    <div class="param"><div class="top"><span>Potencia de agrandado</span><span class="val" id="ci-scale-v"></span></div>
+      <input type="range" id="ci-scale" min="1" max="4" step="0.05"></div>
+    <div class="param"><div class="top"><span>Velocidad de agrandado</span><span class="val" id="ci-speed-v"></span></div>
+      <input type="range" id="ci-speed" min="0.02" max="0.5" step="0.01"></div>
+    <div class="param"><div class="top"><span>Tamano base</span><span class="val" id="ci-size-v"></span></div>
+      <input type="range" id="ci-size" min="0.1" max="3" step="0.05"></div>
+    <p style="color:var(--mut);font-size:12px;margin:8px 0 0">Coloca tus imagenes en la carpeta <b>images/</b> del proyecto para que aparezcan aqui.</p>
+  </div>
+
   <div class="card full">
     <h2>Configuracion por efecto</h2>
     <div class="effect-tabs" id="effect-tabs"></div>
@@ -522,6 +610,13 @@ async function load(){
   $('#p-max').value=STATE.particles.max;
   $('#p-speed').value=STATE.particles.speed; $('#p-speed-v').textContent=(+STATE.particles.speed).toFixed(1);
   $('#p-size').value=STATE.particles.size; $('#p-size-v').textContent=(+STATE.particles.size).toFixed(0);
+
+  const ci=STATE.center; const cim=$('#ci-image'); cim.innerHTML='';
+  ci.images.forEach(n=>cim.appendChild(opt(n)));
+  cim.value=ci.image;
+  $('#ci-scale').value=ci.max_scale; $('#ci-scale-v').textContent=(+ci.max_scale).toFixed(2);
+  $('#ci-speed').value=ci.speed; $('#ci-speed-v').textContent=(+ci.speed).toFixed(2);
+  $('#ci-size').value=ci.size; $('#ci-size-v').textContent=(+ci.size).toFixed(2);
 
   buildChecks(); buildTabs();
   if(!selEffect || !STATE.effects.find(e=>e.name===selEffect)) selEffect=STATE.effects[0].name;
@@ -585,6 +680,13 @@ $('#p-speed').oninput=e=>{ $('#p-speed-v').textContent=(+e.target.value).toFixed
 $('#p-speed').onchange=e=>post('/api/particles',{speed:+e.target.value});
 $('#p-size').oninput=e=>{ $('#p-size-v').textContent=(+e.target.value).toFixed(0); };
 $('#p-size').onchange=e=>post('/api/particles',{size:+e.target.value});
+$('#ci-image').onchange=e=>post('/api/center',{image:e.target.value});
+$('#ci-scale').oninput=e=>{ $('#ci-scale-v').textContent=(+e.target.value).toFixed(2); };
+$('#ci-scale').onchange=e=>post('/api/center',{max_scale:+e.target.value});
+$('#ci-speed').oninput=e=>{ $('#ci-speed-v').textContent=(+e.target.value).toFixed(2); };
+$('#ci-speed').onchange=e=>post('/api/center',{speed:+e.target.value});
+$('#ci-size').oninput=e=>{ $('#ci-size-v').textContent=(+e.target.value).toFixed(2); };
+$('#ci-size').onchange=e=>post('/api/center',{size:+e.target.value});
 $('#btn-save').onclick=()=>post('/api/config/save',{effect:selEffect}).then(()=>flash('#btn-save','Guardado ✓'));
 $('#btn-reload').onclick=async()=>{ await post('/api/config/reload',{effect:selEffect}); await load(); };
 $('#btn-saveall').onclick=()=>post('/api/save_all',{}).then(()=>flash('#btn-saveall','Todo guardado ✓'));

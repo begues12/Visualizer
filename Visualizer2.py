@@ -27,6 +27,9 @@ from Effects.character import FluidFrequencyVisualizer
 from Effects.shockwave import Shockwave
 from Effects.laser_storm import LaserStorm
 from Effects.concert_lasers import ConcertLasers
+from Effects.strobe_glitch import StrobeGlitch
+from Effects.hyper_tunnel import HyperTunnel
+from Effects.bass_shards import BassShards
 import signal
 import sys
 import inspect
@@ -171,9 +174,10 @@ class Visualizer:
             if self.debug_mode:
                 self.debug()
 
-            # Renderiza FPS solo si está en modo debug o si lo necesitas siempre
-            fps = self.clock.get_fps()
-            self.font.render_to(self.screen, (10, 10), f"FPS: {fps:.1f}", (0, 255, 0))
+            # FPS en pantalla solo en modo debug (limpio para fullscreen/concierto)
+            if self.debug_mode:
+                fps = self.clock.get_fps()
+                self.font.render_to(self.screen, (10, 10), f"FPS: {fps:.1f}", (0, 255, 0))
 
             pygame.display.flip()
 
@@ -221,11 +225,12 @@ class Visualizer:
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
         if self.fullscreen:
-            # Usa la resolución nativa del primer monitor
+            # Pantalla completa sin bordes ni barra de titulo (borderless)
             native_res = pygame.display.get_desktop_sizes()[0]
             self.windowed_resolution = self.actual_resolution
             self.actual_resolution = native_res
-            self.screen = pygame.display.set_mode(self.actual_resolution, pygame.FULLSCREEN)
+            self.screen = pygame.display.set_mode(
+                self.actual_resolution, pygame.FULLSCREEN | pygame.NOFRAME | pygame.SCALED)
         else:
             if hasattr(self, "windowed_resolution"):
                 self.actual_resolution = self.windowed_resolution

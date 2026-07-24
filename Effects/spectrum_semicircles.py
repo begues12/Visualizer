@@ -111,9 +111,11 @@ class SpectrumSemicircles(Effect):
             height = int(max(20, height))
             half_w = max(6, int(flame_w * 0.5))
 
-            # Resplandor (llama ancha y tenue, aditiva)
-            g = int(90 * glow_f)
-            glow_col = (int(20 * glow_f), int(60 * glow_f), g) if blue_hot else (int(120 * glow_f), int(50 * glow_f), 0)
+            # Resplandor (llama ancha y tenue, aditiva) -- color limitado a 0..255
+            def _c(x):
+                return max(0, min(255, int(x)))
+            glow_col = (_c(20 * glow_f), _c(60 * glow_f), _c(90 * glow_f)) if blue_hot \
+                else (_c(120 * glow_f), _c(50 * glow_f), 0)
             pygame.draw.polygon(glow_layer, glow_col,
                                 self._flame_poly(x, base_y, int(height * 1.05), int(half_w * 1.5)))
 

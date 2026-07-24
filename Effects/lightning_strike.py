@@ -73,20 +73,23 @@ class LightningStrike(Effect):
                 "bolts": bolts,
                 "phase": "fall",            # cae -> impacta
                 "progress": 1.0,
-                "fall_speed": max(1.0, n / 9.0),  # ~9 frames en descender
+                "fall_speed": max(1.0, n / 13.0),  # desciende visible (~13 frames)
                 "brightness": 255,
                 "strength": strength,
             })
             self.last_strike_time = now
-            # Pequeno resplandor mientras cae; el gran destello es al impactar
-            self.flash = max(self.flash, cfg["flash_intensity"] * 0.25 * strength)
+            # Resplandor tenue mientras cae; el gran destello es al impactar
+            self.flash = max(self.flash, cfg["flash_intensity"] * 0.2 * strength)
 
-        # --- Destello de trueno (blanco que se desvanece) ---
+        # --- Iluminacion del cielo (AZULADA, no lavado blanco) ---
+        # BLEND_ADD ignora el alpha -> escalamos el color: el cielo se tine de azul
+        # y el rayo (blanco) siempre destaca por encima.
         if self.flash > 2:
+            f = min(1.0, self.flash / 255.0)
             overlay = self.get_layer("flash", clear=False)
-            overlay.fill((255, 255, 255, int(min(255, self.flash))))
+            overlay.fill((int(70 * f), int(110 * f), int(190 * f)))
             self.screen.blit(overlay, (0, 0), special_flags=pygame.BLEND_ADD)
-            self.flash *= 0.80  # decaimiento
+            self.flash *= 0.82
 
         # --- Dibuja y actualiza rayos activos ---
         width = max(1, int(cfg["bolt_width"]))
@@ -113,37 +116,51 @@ class LightningStrike(Effect):
                 b = strike["brightness"]
                 self.draw_polyline(main, int(b * flick), width + 1)
                 for branch in strike["bolts"][1:]:
-                    self.draw_polyline(branch, int(b * 0.7 * flick), max(1, width - 1))
-                strike["brightness"] -= 15
+                    self.draw_polyline(branch, int(b * 0.65 * flick), max(1, width - 1))
+                # Resplandor en el punto de impacto (suelo)
+                self._draw_glow(main[-1], int(width * 4 + 14 * strike["strength"]), b)
+                strike["brightness"] -= 11
                 if strike["brightness"] > 0:
                     still_active.append(strike)
         self.active_strikes = still_active
 
     def _draw_head(self, point, width):
         """Cabeza incandescente en la punta del rayo que cae."""
-        gr = max(4, width * 5)
+        self._draw_glow(point, max(4, width * 5), 255)
+
+    def _draw_glow(self, point, radius, brightness):
+        gr = max(2, int(radius))
+        f = max(0.0, min(1.0, brightness / 255.0))
         glow = pygame.Surface((gr * 2, gr * 2), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (110, 160, 255), (gr, gr), gr)
-        pygame.draw.circle(glow, (220, 235, 255), (gr, gr), max(2, gr // 2))
-        pygame.draw.circle(glow, (255, 255, 255), (gr, gr), max(1, gr // 4))
+        pygame.draw.circle(glow, (int(90 * f), int(140 * f), int(230 * f)), (gr, gr), gr)
+        pygame.draw.circle(glow, (int(200 * f), int(225 * f), int(255 * f)), (gr, gr), max(2, gr // 2))
+        pygame.draw.circle(glow, (int(255 * f), int(255 * f), int(255 * f)), (gr, gr), max(1, gr // 4))
         self.screen.blit(glow, (int(point[0] - gr), int(point[1] - gr)), special_flags=pygame.BLEND_ADD)
 
     # ------------------------------------------------------------ geometria
     def generate_strike(self, num_branches):
         w = self.screen.get_width()
         h = self.screen.get_height()
-        start_x = random.randint(w // 4, w * 3 // 4)
-        end_y = random.randint(int(h * 0.7), int(h * 0.95))
-        main = self._bolt_path(start_x, 0, end_y, segments=14)
+        start_x = random.randint(w // 3, w * 2 // 3)
+        end_y = random.randint(int(h * 0.82), int(h * 0.98))  # llega hasta el suelo
+        main = self._bolt_path(start_x, 0, end_y, segments=20)
+        n = len(main)
 
         bolts = [main]
         for _ in range(max(0, num_branches)):
-            if len(main) < 4:
+            if n < 5:
                 break
-            i = random.randint(2, len(main) - 2)
+            i = random.randint(2, n - 3)
             bx, by = main[i]
-            branch_len = random.randint(int(h * 0.1), int(h * 0.3))
-            bolts.append(self._bolt_path(bx, by, by + branch_len, segments=6, spread=1.4))
+            branch_len = random.randint(int(h * 0.12), int(h * 0.34))
+            branch = self._bolt_path(bx, by, min(h, by + branch_len), segments=9, spread=1.7)
+            bolts.append(branch)
+            # Ramita fina (aspecto de raiz, como en un rayo real)
+            if random.random() < 0.6 and len(branch) > 3:
+                j = random.randint(1, len(branch) - 2)
+                tx, ty = branch[j]
+                twig_len = random.randint(int(h * 0.05), int(h * 0.15))
+                bolts.append(self._bolt_path(tx, ty, min(h, ty + twig_len), segments=5, spread=2.1))
         return bolts
 
     def _bolt_path(self, x, y, end_y, segments, spread=1.0):
