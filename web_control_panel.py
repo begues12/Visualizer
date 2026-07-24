@@ -1,3 +1,4 @@
+import os
 import json
 import threading
 import webbrowser
@@ -22,12 +23,15 @@ def _range_for(value):
 
 
 class WebControlPanel:
-    def __init__(self, visualizer, host="127.0.0.1", port=5000):
+    def __init__(self, visualizer, host="0.0.0.0", port=5000):
         self.visualizer = visualizer
         self.host = host
         self.port = port
+        base = os.path.dirname(os.path.abspath(__file__))
+        self.settings_path = os.path.join(base, "config", "settings.json")
         self.app = Flask(__name__)
         self.setup_routes()
+        self.load_and_apply_settings()
 
     # -------------------------------------------------------------- helpers
     def _find_effect(self, name):
@@ -36,18 +40,102 @@ class WebControlPanel:
                 return e
         return None
 
+    # ---------------------------------------------------- persistencia global
+    def capture_settings(self):
+        v = self.visualizer
+        return {
+            "mode": v.change_mode,
+            "duration": v.effect_duration,
+            "sensitivity": v.audioManager.sensitivity,
+            "current": v.current_function.get_effect_name(),
+            "active": [e.get_effect_name() for e in getattr(v, "active_effects", [])],
+            "particles": {
+                "max": v.particle_manager.get_max_particles(),
+                "speed": getattr(v, "particle_speed", 1),
+                "size": getattr(v, "particle_size", 1),
+            },
+            "device": v.audioManager.get_device_index(),
+            "resolution": [v.actual_resolution[0], v.actual_resolution[1]],
+            "fps": getattr(v, "fps", 60),
+        }
+
+    def save_settings(self):
+        try:
+            os.makedirs(os.path.dirname(self.settings_path), exist_ok=True)
+            with open(self.settings_path, "w") as f:
+                json.dump(self.capture_settings(), f, indent=4)
+        except Exception as e:
+            print(f"[WebControlPanel] Error guardando ajustes: {e}")
+
+    def load_and_apply_settings(self):
+        try:
+            with open(self.settings_path) as f:
+                data = json.load(f)
+        except Exception:
+            return
+        self.apply_settings(data)
+        print("[WebControlPanel] Ajustes previos cargados.")
+
+    def apply_settings(self, data):
+        v = self.visualizer
+        try:
+            if "mode" in data:
+                v.change_mode = data["mode"]
+            if "duration" in data:
+                v.effect_duration = float(data["duration"])
+            if "sensitivity" in data:
+                v.audioManager.set_sensitivity(float(data["sensitivity"]))
+            if data.get("active"):
+                sel = [e for e in v.drawing_functions if e.get_effect_name() in set(data["active"])]
+                if sel:
+                    v.active_effects = sel
+            if data.get("current"):
+                e = self._find_effect(data["current"])
+                if e:
+                    v.current_function = e
+            p = data.get("particles", {})
+            if "max" in p:
+                v.particle_manager.max_particles = int(p["max"])
+            if "speed" in p:
+                v.particle_speed = float(p["speed"])
+                v.particle_manager.particle_speed = float(p["speed"])
+            if "size" in p:
+                v.particle_size = float(p["size"])
+                v.particle_manager.particle_size = float(p["size"])
+            if data.get("device") is not None:
+                try:
+                    v.audioManager.set_device(int(data["device"]))
+                except Exception:
+                    pass
+            if data.get("fps"):
+                v.fps = int(data["fps"])
+            if data.get("resolution"):
+                w, h = int(data["resolution"][0]), int(data["resolution"][1])
+                v.enqueue(lambda: v.change_resolution(w, h))
+        except Exception as e:
+            print(f"[WebControlPanel] Error aplicando ajustes: {e}")
+
     def _state(self):
         v = self.visualizer
         active_names = {e.get_effect_name() for e in getattr(v, "active_effects", [])}
         effects = []
         for e in v.drawing_functions:
             params = []
+            meta = getattr(e, "config_meta", {}) or {}
             for key, value in e.get_config().items():
                 if isinstance(value, bool) or not isinstance(value, (int, float)):
                     continue
                 lo, hi, step, is_int = _range_for(value)
+                label = key
+                m = meta.get(key)
+                if m:
+                    lo = m.get("min", lo)
+                    hi = m.get("max", hi)
+                    step = m.get("step", step)
+                    is_int = m.get("is_int", is_int)
+                    label = m.get("label", key)
                 params.append({
-                    "key": key, "value": value,
+                    "key": key, "label": label, "value": value,
                     "min": lo, "max": hi, "step": step, "is_int": is_int,
                 })
             effects.append({
@@ -66,9 +154,12 @@ class WebControlPanel:
                 "size": getattr(v, "particle_size", 1),
             },
             "sensitivity": self.visualizer.audioManager.sensitivity,
+            "devices": v.audioManager.list_input_devices(),
+            "device": v.audioManager.get_device_index(),
             "resolution": f"{v.actual_resolution[0]}x{v.actual_resolution[1]}",
             "resolutions": [f"{r[0]}x{r[1]}" for r in v.resolutions],
             "screens": pygame.display.get_num_displays(),
+            "fps": getattr(v, "fps", 60),
         }
 
     def _debug(self):
@@ -111,6 +202,7 @@ class WebControlPanel:
             e = self._find_effect(request.json.get("name"))
             if e:
                 v.current_function = e
+                self.save_settings()
             return jsonify(ok=bool(e))
 
         @app.route("/api/step", methods=["POST"])
@@ -122,6 +214,7 @@ class WebControlPanel:
             except ValueError:
                 idx = 0
             v.current_function = effects[(idx + direction) % len(effects)]
+            self.save_settings()
             return jsonify(current=v.current_function.get_effect_name())
 
         @app.route("/api/active", methods=["POST"])
@@ -133,16 +226,19 @@ class WebControlPanel:
             v.active_effects = selected
             if v.current_function not in selected:
                 v.current_function = selected[0]
+            self.save_settings()
             return jsonify(ok=True, current=v.current_function.get_effect_name())
 
         @app.route("/api/mode", methods=["POST"])
         def set_mode():
             v.change_mode = request.json.get("mode", "static")
+            self.save_settings()
             return jsonify(ok=True)
 
         @app.route("/api/duration", methods=["POST"])
         def set_duration():
             v.effect_duration = float(request.json.get("seconds", 15)) * 1000
+            self.save_settings()
             return jsonify(ok=True)
 
         @app.route("/api/config", methods=["POST"])
@@ -183,17 +279,36 @@ class WebControlPanel:
             if "size" in data:
                 v.particle_size = float(data["size"])
                 v.particle_manager.particle_size = float(data["size"])
+            self.save_settings()
             return jsonify(ok=True)
 
         @app.route("/api/sensitivity", methods=["POST"])
         def set_sensitivity():
             v.audioManager.set_sensitivity(float(request.json.get("value", 0.5)))
+            self.save_settings()
+            return jsonify(ok=True)
+
+        @app.route("/api/device", methods=["POST"])
+        def set_device():
+            v.audioManager.set_device(int(request.json.get("index")))
+            self.save_settings()
             return jsonify(ok=True)
 
         @app.route("/api/resolution", methods=["POST"])
         def set_resolution():
             w, h = map(int, request.json.get("resolution").split("x"))
             v.enqueue(lambda: v.change_resolution(w, h))
+            self.save_settings()
+            return jsonify(ok=True)
+
+        @app.route("/api/save_all", methods=["POST"])
+        def save_all():
+            for e in v.drawing_functions:
+                try:
+                    e.save_config_to_file(e.get_config_file())
+                except Exception:
+                    pass
+            self.save_settings()
             return jsonify(ok=True)
 
         @app.route("/api/screen", methods=["POST"])
@@ -207,11 +322,29 @@ class WebControlPanel:
             v.enqueue(v.toggle_fullscreen)
             return jsonify(ok=True)
 
+        @app.route("/api/fps", methods=["POST"])
+        def set_fps():
+            v.fps = max(10, min(120, int(request.json.get("value", 60))))
+            self.save_settings()
+            return jsonify(ok=True, fps=v.fps)
+
     # ------------------------------------------------------------------ run
+    def _lan_ip(self):
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
+
     def run(self):
-        url = f"http://{self.host}:{self.port}"
-        print(f"[WebControlPanel] Panel disponible en {url}")
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        lan = self._lan_ip()
+        print(f"[WebControlPanel] En este PC:  http://localhost:{self.port}")
+        print(f"[WebControlPanel] En el movil: http://{lan}:{self.port}  (misma red Wi-Fi)")
+        threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{self.port}")).start()
         self.app.run(host=self.host, port=self.port, debug=False,
                      use_reloader=False, threaded=True)
 
@@ -229,7 +362,7 @@ PAGE = r"""<!doctype html>
   header { padding:14px 20px; background:var(--panel); border-bottom:1px solid #2a2f3a; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:10;}
   header h1 { font-size:16px; margin:0; letter-spacing:.3px; }
   .pill { background:var(--panel2); border-radius:20px; padding:4px 12px; font-size:12px; color:var(--mut); }
-  .wrap { max-width:1100px; margin:0 auto; padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:20px; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
   .card { background:var(--panel); border:1px solid #262b36; border-radius:12px; padding:16px; }
   .card h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); }
   .full { grid-column:1 / -1; }
@@ -253,6 +386,27 @@ PAGE = r"""<!doctype html>
   .dbg div { background:var(--panel2); border-radius:8px; padding:8px 10px; }
   .dbg .k { font-size:11px; color:var(--mut); text-transform:uppercase; }
   .dbg .v { font-size:18px; font-weight:600; font-variant-numeric:tabular-nums; }
+  /* ---- Movil ---- */
+  @media (max-width:640px) {
+    header { padding:10px 14px; gap:8px; flex-wrap:wrap; }
+    header h1 { font-size:15px; }
+    .pill { padding:3px 10px; font-size:11px; }
+    .wrap { padding:12px; gap:12px; grid-template-columns:1fr; }
+    .card { padding:14px; border-radius:14px; }
+    .checks { grid-template-columns:1fr; }
+    .grid2 { grid-template-columns:1fr; }
+    /* Controles mas grandes para el dedo */
+    select, input[type=number] { font-size:16px; padding:12px; }
+    button { padding:12px 16px; font-size:15px; }
+    .checks label { padding:6px 0; font-size:15px; }
+    input[type=range] { height:28px; }
+    .effect-tabs button { padding:10px 12px; }
+    .dbg { grid-template-columns:repeat(auto-fit,minmax(90px,1fr)); }
+  }
+  /* Areas tactiles mayores en cualquier pantalla tactil */
+  @media (pointer:coarse) {
+    input[type=range] { height:26px; }
+  }
 </style>
 </head>
 <body>
@@ -287,9 +441,13 @@ PAGE = r"""<!doctype html>
     <select id="resolution"></select>
     <label>Monitor</label>
     <select id="screen"></select>
+    <div class="param" style="margin-top:12px"><div class="top"><span>Limite de FPS (bajalo en Raspberry Pi)</span><span class="val" id="fps-v"></span></div>
+      <input type="range" id="fps" min="10" max="60" step="5"></div>
     <div class="row" style="margin-top:12px">
       <button onclick="post('/api/fullscreen',{})">Pantalla completa (on/off)</button>
     </div>
+    <label style="margin-top:14px">🎤 Microfono / entrada de audio</label>
+    <select id="device"></select>
     <label style="margin-top:14px">Sensibilidad de sonido</label>
     <div class="param"><div class="top"><span></span><span class="val" id="sens-v"></span></div>
       <input type="range" id="sens" min="0" max="5" step="0.05"></div>
@@ -319,9 +477,11 @@ PAGE = r"""<!doctype html>
     <div class="effect-tabs" id="effect-tabs"></div>
     <div id="effect-config"></div>
     <div class="row" style="margin-top:14px">
-      <button class="primary" id="btn-save">Guardar en archivo</button>
-      <button id="btn-reload">Recargar de archivo</button>
+      <button class="primary" id="btn-save">Guardar este efecto</button>
+      <button id="btn-reload">Restablecer (del archivo)</button>
+      <button id="btn-saveall">💾 Guardar TODO</button>
     </div>
+    <p style="color:var(--mut);font-size:12px;margin:10px 0 0">Los ajustes generales (modo, volumen, micro, resolucion, efectos activos...) se guardan solos y se recuerdan al reiniciar. "Guardar TODO" ademas fija la config de todos los efectos.</p>
   </div>
 
   <div class="card full">
@@ -353,6 +513,11 @@ async function load(){
   const scr=$('#screen'); scr.innerHTML='';
   for(let i=0;i<STATE.screens;i++) scr.appendChild(opt(i, 'Monitor '+(i+1)));
 
+  const dev=$('#device'); dev.innerHTML='';
+  STATE.devices.forEach(d=>dev.appendChild(opt(d.index, d.name)));
+  dev.value=STATE.device;
+
+  $('#fps').value=STATE.fps; $('#fps-v').textContent=STATE.fps;
   $('#sens').value=STATE.sensitivity; $('#sens-v').textContent=(+STATE.sensitivity).toFixed(2);
   $('#p-max').value=STATE.particles.max;
   $('#p-speed').value=STATE.particles.speed; $('#p-speed-v').textContent=(+STATE.particles.speed).toFixed(1);
@@ -395,7 +560,7 @@ function buildConfig(name){
   e.params.forEach(p=>{
     const wrap=document.createElement('div'); wrap.className='param';
     const val=p.is_int?p.value:(+p.value).toFixed(3);
-    wrap.innerHTML=`<div class="top"><span>${p.key}</span><span class="val">${val}</span></div>`;
+    wrap.innerHTML=`<div class="top"><span>${p.label||p.key}</span><span class="val">${val}</span></div>`;
     const r=document.createElement('input'); r.type='range'; r.min=p.min; r.max=p.max; r.step=p.step; r.value=p.value;
     const out=wrap.querySelector('.val');
     r.oninput=()=>{ out.textContent = p.is_int? Math.round(r.value) : (+r.value).toFixed(3); };
@@ -410,6 +575,9 @@ $('#mode').onchange=e=>post('/api/mode',{mode:e.target.value});
 $('#duration').onchange=e=>post('/api/duration',{seconds:+e.target.value});
 $('#resolution').onchange=e=>post('/api/resolution',{resolution:e.target.value});
 $('#screen').onchange=e=>post('/api/screen',{index:+e.target.value});
+$('#device').onchange=e=>post('/api/device',{index:+e.target.value});
+$('#fps').oninput=e=>{ $('#fps-v').textContent=e.target.value; };
+$('#fps').onchange=e=>post('/api/fps',{value:+e.target.value});
 $('#sens').oninput=e=>{ $('#sens-v').textContent=(+e.target.value).toFixed(2); };
 $('#sens').onchange=e=>post('/api/sensitivity',{value:+e.target.value});
 $('#p-max').onchange=e=>post('/api/particles',{max:+e.target.value});
@@ -419,6 +587,7 @@ $('#p-size').oninput=e=>{ $('#p-size-v').textContent=(+e.target.value).toFixed(0
 $('#p-size').onchange=e=>post('/api/particles',{size:+e.target.value});
 $('#btn-save').onclick=()=>post('/api/config/save',{effect:selEffect}).then(()=>flash('#btn-save','Guardado ✓'));
 $('#btn-reload').onclick=async()=>{ await post('/api/config/reload',{effect:selEffect}); await load(); };
+$('#btn-saveall').onclick=()=>post('/api/save_all',{}).then(()=>flash('#btn-saveall','Todo guardado ✓'));
 async function step(d){ const r=await post('/api/step',{dir:d}); $('#current').value=r.current; }
 function flash(sel,txt){ const b=$(sel),o=b.textContent; b.textContent=txt; setTimeout(()=>b.textContent=o,1200); }
 

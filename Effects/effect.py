@@ -1,15 +1,30 @@
 import random
 import json
+import pygame
 
 class Effect:
     def __init__(self, effect_name, visualizer, screen):
-        self.effect_name = effect_name  
-        self.visualizer = visualizer 
+        self.effect_name = effect_name
+        self.visualizer = visualizer
         self.config = {}
         self.screen = screen
         self.width, self.height = self.screen.get_size()
         self.center_x, self.center_y = self.width // 2, self.height // 2
         self.config_file = ""
+        self._layers = {}
+
+    def get_layer(self, name="main", clear=True):
+        """Devuelve una superficie SRCALPHA del tamano de la pantalla, reutilizada
+        entre frames (evita reservar memoria cada frame -> clave en Raspberry Pi).
+        """
+        size = self.visualizer.get_screen().get_size()
+        layer = self._layers.get(name)
+        if layer is None or layer.get_size() != size:
+            layer = pygame.Surface(size, pygame.SRCALPHA)
+            self._layers[name] = layer
+        elif clear:
+            layer.fill((0, 0, 0, 0))
+        return layer
         
     def get_width(self):    
         return self.width

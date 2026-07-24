@@ -1,246 +1,169 @@
 import pygame
 import math
+import colorsys
 import numpy as np
 from Effects.effect import Effect
-import random
+
 
 class FluidFrequencyVisualizer(Effect):
     def __init__(self, visualizer):
         super().__init__("Fluid Frequency", visualizer, visualizer.get_screen())
         self.screen = visualizer.get_screen()
         self.audio_manager = visualizer.get_audio_manager()
-        
-        # Centro de la pantalla
+
         self.center_x = self.screen.get_width() // 2
         self.center_y = self.screen.get_height() // 2
-        
-        # Un solo blob central grande
-        self.blob = {
-            'x': self.center_x,
-            'y': self.center_y,
-            'radius': 520,
-            'base_radius': 320
+        self.blob = {'x': self.center_x, 'y': self.center_y}
+
+        # Config editable desde el panel web
+        defaults = {
+            "base_size": 0.26,    # tamano base (fraccion de la pantalla)
+            "deformation": 1.0,   # intensidad de la deformacion
+            "glow": 1.0,          # intensidad del aura
+            "color_speed": 1.0,   # velocidad de cambio de color
+            "num_points": 40,     # resolucion del contorno
         }
-        
-        # Variables para análisis de audio
-        self.freq_bands = {
-            'bass': 0.0,      # Graves (0-250 Hz)
-            'mid': 0.0,       # Medios (250-4000 Hz)  
-            'treble': 0.0     # Agudos (4000+ Hz)
+        self.config_meta = {
+            "base_size": {"min": 0.1, "max": 0.5, "step": 0.01, "label": "Tamano base"},
+            "deformation": {"min": 0.0, "max": 3.0, "step": 0.1, "label": "Deformacion"},
+            "glow": {"min": 0.0, "max": 3.0, "step": 0.1, "label": "Resplandor"},
+            "color_speed": {"min": 0.0, "max": 4.0, "step": 0.1, "label": "Velocidad de color"},
+            "num_points": {"min": 12, "max": 80, "step": 1, "label": "Detalle del contorno"},
         }
-        
-        # Suavizado de valores
-        self.volume_smooth = 0.0
-        self.bass_smooth = 0.0
-        self.mid_smooth = 0.0
-        self.treble_smooth = 0.0
-        
-        # Animación
-        self.time = 0
-        self.beat_intensity = 0.0
-        
-        # Configuración de deformación
-        self.num_points = 32  # Número de puntos del perímetro para deformación
-        self.deformation_points = [0.0] * self.num_points
-        self.deformation_intensity = 2.0  # Multiplicador de deformación (1.0 = normal, 2.0 = doble intensidad)
-        
-    def analyze_frequency_bands(self, freq_data):
-        """Analiza las frecuencias en bandas de graves, medios y agudos"""
-        if len(freq_data) < 32:
-            return
-            
-        # Dividir el espectro en bandas
-        total_bins = len(freq_data)
-        
-        # Graves: primeros 20% de bins (aproximadamente 0-4kHz si sample rate = 44.1kHz)
-        bass_end = int(total_bins * 0.2)
-        # Medios: 20%-70% de bins (aproximadamente 4-14kHz)
-        mid_end = int(total_bins * 0.7)
-        # Agudos: 70%-100% de bins (aproximadamente 14-22kHz)
-        
-        bass_energy = np.mean(freq_data[:bass_end]) if bass_end > 0 else 0
-        mid_energy = np.mean(freq_data[bass_end:mid_end]) if mid_end > bass_end else 0
-        treble_energy = np.mean(freq_data[mid_end:]) if len(freq_data) > mid_end else 0
-        
-        # Normalizar
-        max_val = 32768.0
-        self.freq_bands['bass'] = min(1.0, bass_energy / max_val)
-        self.freq_bands['mid'] = min(1.0, mid_energy / max_val)
-        self.freq_bands['treble'] = min(1.0, treble_energy / max_val)
-        
-    def smooth_values(self, volume_normalized):
-        """Suaviza los valores de audio para animaciones fluidas"""
-        smoothing = 0.9  # Factor de suavizado (0-1, más alto = más suave)
-        
-        # Suavizar volumen
-        self.volume_smooth = self.volume_smooth * smoothing + volume_normalized * (1 - smoothing)
-        
-        # Suavizar bandas de frecuencia
-        self.bass_smooth = self.bass_smooth * smoothing + self.freq_bands['bass'] * (1 - smoothing)
-        self.mid_smooth = self.mid_smooth * smoothing + self.freq_bands['mid'] * (1 - smoothing)
-        self.treble_smooth = self.treble_smooth * smoothing + self.freq_bands['treble'] * (1 - smoothing)
-        
-        # Calcular intensidad del beat (cambios súbitos en graves)
-        bass_change = abs(self.freq_bands['bass'] - self.bass_smooth)
-        self.beat_intensity = max(0, bass_change * 2.0)
-        
-    def generate_deformed_blob_points(self):
-        """Genera puntos del perímetro deformado del blob según el audio"""
-        points = []
-        
-        # Radio base dinámico según volumen
-        base_radius = self.blob['base_radius'] * (0.5 + self.volume_smooth * 1.5)
-        
-        for i in range(self.num_points):
-            angle = (i / self.num_points) * 2 * math.pi
-            
-            # Deformaciones según diferentes frecuencias (aplicando multiplicador de intensidad)
-            
-            # Graves: deformación lenta y amplia (ondas largas)
-            bass_deform = self.bass_smooth * 30 * self.deformation_intensity * math.sin(angle * 2 + self.time * 2)
-            
-            # Medios: deformación media (ondas medianas)
-            mid_deform = self.mid_smooth * 20 * self.deformation_intensity * math.sin(angle * 4 + self.time * 3)
-            
-            # Agudos: deformación rápida y pequeña (ondas cortas)
-            treble_deform = self.treble_smooth * 15 * self.deformation_intensity * math.sin(angle * 8 + self.time * 5)
-            
-            # Beat: pulsaciones súbitas
-            beat_deform = self.beat_intensity * 25 * self.deformation_intensity * math.sin(angle * 3)
-            
-            # Movimiento orgánico base
-            organic_deform = 10 * self.deformation_intensity * math.sin(angle * 3 + self.time * 1.5) * math.cos(angle * 2 + self.time)
-            
-            # Radio final con todas las deformaciones
-            total_deform = bass_deform + mid_deform + treble_deform + beat_deform + organic_deform
-            radius = base_radius + total_deform
-            
-            # Asegurar radio mínimo
-            radius = max(30, radius)
-            
-            # Calcular posición del punto
-            x = self.blob['x'] + radius * math.cos(angle)
-            y = self.blob['y'] + radius * math.sin(angle)
-            
-            points.append((x, y))
-            
-        return points
-        
-    def get_dynamic_color(self):
-        """Calcula el color dinámico basado en las frecuencias"""
-        # Color base según predominancia de frecuencias
-        
-        # Rojo para graves
-        red = int(255 * self.bass_smooth)
-        
-        # Verde para medios  
-        green = int(255 * self.mid_smooth)
-        
-        # Azul para agudos
-        blue = int(255 * self.treble_smooth)
-        
-        # Intensidad mínima para visibilidad
-        red = max(50, red)
-        green = max(50, green)
-        blue = max(50, blue)
-        
-        # Modulación temporal para variación
-        time_mod = (math.sin(self.time * 2) + 1) / 2
-        red = int(red * (0.7 + 0.3 * time_mod))
-        green = int(green * (0.7 + 0.3 * math.sin(self.time * 2.5 + 1)))
-        blue = int(blue * (0.7 + 0.3 * math.sin(self.time * 3 + 2)))
-        
-        return (red, green, blue)
-        
-    def draw_smooth_blob(self, points, color):
-        """Dibuja el blob con curvas suaves usando splines"""
-        if len(points) < 3:
-            return
-            
-        # Crear puntos de control para curvas Bezier
-        smooth_points = []
-        num_segments = len(points)
-        
-        for i in range(num_segments):
+        self.config_file = "Effects/configs/character_config.json"
+        loaded = {}
+        try:
+            self.load_config_from_file(self.config_file)
+            loaded = self.config
+        except Exception:
+            pass
+        self.config = {k: loaded.get(k, dv) for k, dv in defaults.items()}
+
+        # Suavizado de audio
+        self.vol_s = 0.0
+        self.bass_s = 0.0
+        self.mid_s = 0.0
+        self.treble_s = 0.0
+        self.pulse = 0.0     # golpe (decae)
+        self.hue = 0.0
+        self.time = 0.0
+
+    def _analyze(self, freq):
+        n = len(freq)
+        if n < 8:
+            return 0.0, 0.0, 0.0
+        bass = float(np.mean(freq[:int(n * 0.15)]))
+        mid = float(np.mean(freq[int(n * 0.15):int(n * 0.55)]))
+        treble = float(np.mean(freq[int(n * 0.55):]))
+        norm = 32768.0
+        return min(1.0, bass / norm), min(1.0, mid / norm), min(1.0, treble / norm)
+
+    def _blob_points(self, w, h):
+        cfg = self.config
+        n = max(8, int(cfg["num_points"]))
+        di = cfg["deformation"]
+        ref = min(w, h) / 540.0
+        base_radius = cfg["base_size"] * min(w, h) * (0.55 + 1.15 * self.vol_s + 0.6 * self.pulse)
+        min_radius = 0.07 * min(w, h)
+        t = self.time
+        pts = []
+        for i in range(n):
+            a = (i / n) * 2 * math.pi
+            deform = (
+                self.bass_s * 42 * di * ref * math.sin(a * 2 + t * 2)
+                + self.mid_s * 26 * di * ref * math.sin(a * 4 + t * 3)
+                + self.treble_s * 18 * di * ref * math.sin(a * 8 + t * 5)
+                + self.pulse * 34 * di * ref * math.sin(a * 3)
+                + 12 * di * ref * math.sin(a * 3 + t * 1.5) * math.cos(a * 2 + t)
+            )
+            r = max(min_radius, base_radius + deform)
+            pts.append((self.blob['x'] + r * math.cos(a), self.blob['y'] + r * math.sin(a)))
+        return pts
+
+    def _smooth(self, points, steps=6):
+        """Suaviza el contorno con interpolacion cuadratica cerrada."""
+        n = len(points)
+        out = []
+        for i in range(n):
             p0 = points[i]
-            p1 = points[(i + 1) % num_segments]
-            p2 = points[(i + 2) % num_segments]
-            
-            # Interpolar varios puntos entre cada par de puntos originales
-            for t in np.linspace(0, 1, 8):  # 8 puntos interpolados por segmento
-                # Interpolación cuadrática simple para suavizar
-                x = (1-t)**2 * p0[0] + 2*(1-t)*t * p1[0] + t**2 * p2[0]
-                y = (1-t)**2 * p0[1] + 2*(1-t)*t * p1[1] + t**2 * p2[1]
-                smooth_points.append((x, y))
-        
-        # Dibujar el blob relleno
-        if len(smooth_points) > 2:
-            pygame.draw.polygon(self.screen, color, smooth_points)
-            
-            # Borde más brillante
-            border_color = tuple(min(255, c + 50) for c in color)
-            pygame.draw.polygon(self.screen, border_color, smooth_points, 3)
-    
+            p1 = points[(i + 1) % n]
+            p2 = points[(i + 2) % n]
+            for t in np.linspace(0, 1, steps):
+                mt = 1 - t
+                x = mt * mt * p0[0] + 2 * mt * t * p1[0] + t * t * p2[0]
+                y = mt * mt * p0[1] + 2 * mt * t * p1[1] + t * t * p2[1]
+                out.append((x, y))
+        return out
+
+    def _scale(self, pts, s):
+        cx, cy = self.blob['x'], self.blob['y']
+        return [(cx + (x - cx) * s, cy + (y - cy) * s) for x, y in pts]
+
     def draw(self, audio_data):
-        # Fondo negro
-        self.screen.fill((0, 0, 0))
-        
-        # Obtener datos de audio
-        freq_data = self.audio_manager.get_frequency_data(audio_data)
-        if len(freq_data) == 0:
-            freq_data = np.zeros(512)
-            
-        volume = self.audio_manager.get_volume(audio_data)
-        volume_normalized = min(1.0, volume / 32768.0)
-        
-        # Actualizar tiempo
-        self.time += 0.05
-        
-        # Analizar bandas de frecuencia
-        self.analyze_frequency_bands(freq_data)
-        
-        # Suavizar valores
-        self.smooth_values(volume_normalized)
-        
-        # Generar puntos deformados del blob
-        blob_points = self.generate_deformed_blob_points()
-        
-        # Obtener color dinámico
-        blob_color = self.get_dynamic_color()
-        
-        # Dibujar el blob
-        self.draw_smooth_blob(blob_points, blob_color)
-        
-        # Efecto de centro brillante
-        center_intensity = (self.volume_smooth + self.beat_intensity) * 0.5
-        if center_intensity > 0.1:
-            center_color = tuple(min(255, int(c * 1.5)) for c in blob_color)
-            center_radius = int(20 * center_intensity)
-            pygame.draw.circle(self.screen, center_color, 
-                             (int(self.blob['x']), int(self.blob['y'])), 
-                             center_radius)
-        
-        return self.screen
-    
+        screen = self.visualizer.get_screen()
+        self.screen = screen
+        w, h = screen.get_size()
+        self.blob['x'], self.blob['y'] = w // 2, h // 2
+        screen.fill((0, 0, 0))
+
+        # --- Audio ---
+        freq = self.audio_manager.get_frequency_data(audio_data)
+        if len(freq) == 0:
+            freq = np.zeros(512)
+        volume = min(1.0, self.audio_manager.get_volume(audio_data) / 32768.0)
+        bass, mid, treble = self._analyze(freq)
+
+        # Golpe = subida brusca de graves
+        prev_bass = self.bass_s
+        s = 0.85
+        self.vol_s = self.vol_s * s + volume * (1 - s)
+        self.bass_s = self.bass_s * s + bass * (1 - s)
+        self.mid_s = self.mid_s * s + mid * (1 - s)
+        self.treble_s = self.treble_s * s + treble * (1 - s)
+        if bass - prev_bass > 0.06:
+            self.pulse = min(1.0, self.pulse + (bass - prev_bass) * 4)
+        self.pulse *= 0.88
+        self.time += 0.04 + 0.05 * self.vol_s
+
+        # --- Color HSV que rota y reacciona a las bandas ---
+        self.hue = (self.hue + 0.0015 * self.config["color_speed"] + 0.02 * self.pulse) % 1.0
+        hue = (self.hue + 0.15 * self.bass_s - 0.1 * self.treble_s) % 1.0
+        sat = 0.55 + 0.35 * self.mid_s
+        base = np.array(colorsys.hsv_to_rgb(hue, sat, 1.0)) * 255
+        comp = np.array(colorsys.hsv_to_rgb((hue + 0.5) % 1.0, sat, 1.0)) * 255
+
+        # --- Contorno suave ---
+        pts = self._smooth(self._blob_points(w, h), steps=6)
+        if len(pts) < 3:
+            return
+
+        glow_f = self.config["glow"] * (0.4 + 0.6 * self.vol_s)
+        layer = self.get_layer("main")
+
+        def col(rgb, f):
+            return (int(min(255, rgb[0] * f)), int(min(255, rgb[1] * f)), int(min(255, rgb[2] * f)))
+
+        # Aura exterior (grande y tenue) -> cuerpo -> nucleo brillante
+        pygame.draw.polygon(layer, col(comp, 0.22 * glow_f), self._scale(pts, 1.45))
+        pygame.draw.polygon(layer, col(base, 0.45 * glow_f), self._scale(pts, 1.18))
+        pygame.draw.polygon(layer, col(base, 0.9), pts)
+        pygame.draw.polygon(layer, col(base * 0.4 + np.array([255, 255, 255]) * 0.6, 0.85),
+                            self._scale(pts, 0.55))
+        screen.blit(layer, (0, 0), special_flags=pygame.BLEND_ADD)
+
+        # Nucleo central palpitante
+        core_r = int((6 + 26 * self.vol_s + 30 * self.pulse))
+        if core_r > 1:
+            core = pygame.Surface((core_r * 2, core_r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(core, (255, 255, 255), (core_r, core_r), core_r)
+            pygame.draw.circle(core, col(base, 1.0), (core_r, core_r), core_r, max(1, core_r // 4))
+            screen.blit(core, (self.blob['x'] - core_r, self.blob['y'] - core_r),
+                        special_flags=pygame.BLEND_ADD)
+
     def on_screen_resize(self, width, height):
+        super().on_screen_resize(width, height)
         self.screen = self.visualizer.get_screen()
         self.center_x = width // 2
         self.center_y = height // 2
         self.blob['x'] = self.center_x
         self.blob['y'] = self.center_y
-        
-    def set_deformation_intensity(self, intensity):
-        """
-        Ajusta la intensidad de deformación del blob
-        Args:
-            intensity (float): Multiplicador de deformación
-                - 0.5 = Deformación suave
-                - 1.0 = Deformación normal
-                - 2.0 = Deformación intensa
-                - 3.0 = Deformación extrema
-        """
-        self.deformation_intensity = max(0.1, intensity)  # Mínimo 0.1 para evitar que desaparezca
-        
-    def get_deformation_intensity(self):
-        """Obtiene la intensidad de deformación actual"""
-        return self.deformation_intensity

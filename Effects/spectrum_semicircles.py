@@ -1,131 +1,136 @@
 import pygame
 import numpy as np
-import colorsys
-import random
 import math
+import random
 from Effects.effect import Effect
+
 
 class SpectrumSemicircles(Effect):
     def __init__(self, visualizer):
         super().__init__("Audio Flames", visualizer, visualizer.get_screen())
         self.audio_manager = visualizer.get_audio_manager()
         self.screen = self.visualizer.get_screen()
-        self.phase = 0
-        self.num_flames = 8
-        self.base_positions = []
-        self.precalc_colors = []
+
+        defaults = {
+            "num_flames": 9,     # numero de llamas
+            "height": 1.0,       # multiplicador de altura
+            "sway_speed": 1.0,   # velocidad del balanceo
+            "flicker": 1.0,      # temblor por agudos
+            "glow": 1.0,         # intensidad del resplandor
+        }
+        self.config_meta = {
+            "num_flames": {"min": 3, "max": 20, "step": 1, "label": "Numero de llamas"},
+            "height": {"min": 0.3, "max": 2.5, "step": 0.05, "label": "Altura"},
+            "sway_speed": {"min": 0.0, "max": 4.0, "step": 0.1, "label": "Balanceo"},
+            "flicker": {"min": 0.0, "max": 3.0, "step": 0.1, "label": "Temblor (agudos)"},
+            "glow": {"min": 0.0, "max": 3.0, "step": 0.1, "label": "Resplandor"},
+        }
+        self.config_file = "Effects/configs/spectrum_semicircles_config.json"
+        loaded = {}
+        try:
+            self.load_config_from_file(self.config_file)
+            loaded = self.config
+        except Exception:
+            pass
+        self.config = {k: loaded.get(k, dv) for k, dv in defaults.items()}
+
+        # Suavizado de audio para movimiento fluido
+        self.vol_s = 0.0
+        self.bass_s = 0.0
+        self.treble_s = 0.0
+
         self.last_size = (0, 0)
-        self._precalc_static()
+        self._num = 0
+        self.positions = []
+        self.phases = []
+        self._precalc()
 
-    def _precalc_static(self):
+    def _precalc(self):
         w, h = self.screen.get_size()
-        self.base_positions = [int((i + 1) * w // (self.num_flames + 1)) for i in range(self.num_flames)]
-        # Precalcula gradientes de color para lenguas secundarias
-        self.precalc_colors = []
-        for rel in np.linspace(0, 1, 10):
-            hue = 0.09 - 0.06 * rel
-            sat = 1.0
-            val = 1.0 - 0.2 * rel
-            color = tuple(int(c * 255) for c in colorsys.hsv_to_rgb(hue, sat, val))
-            self.precalc_colors.append(color)
+        n = max(1, int(self.config["num_flames"]))
+        self.positions = [int((i + 1) * w / (n + 1)) for i in range(n)]
+        self.phases = [random.uniform(0, 2 * math.pi) for _ in range(n)]
         self.last_size = (w, h)
+        self._num = n
 
-    def bezier_curve(self, points, steps=8):
-        n = len(points) - 1
-        result = []
+    def _bezier(self, p0, p1, p2, steps=8):
+        pts = []
         for t in np.linspace(0, 1, steps):
-            x = 0
-            y = 0
-            for i, (px, py) in enumerate(points):
-                bern = math.comb(n, i) * (t ** i) * ((1 - t) ** (n - i))
-                x += px * bern
-                y += py * bern
-            result.append((int(x), int(y)))
-        return result
-    
-    
+            mt = 1 - t
+            x = mt * mt * p0[0] + 2 * mt * t * p1[0] + t * t * p2[0]
+            y = mt * mt * p0[1] + 2 * mt * t * p1[1] + t * t * p2[1]
+            pts.append((int(x), int(y)))
+        return pts
+
+    def _flame_poly(self, x, base_y, height, half_w):
+        tip = (x, base_y - height)
+        left = (x - half_w, base_y)
+        right = (x + half_w, base_y)
+        c1 = (x - int(half_w * 0.6), base_y - int(height * 0.5))
+        c2 = (x + int(half_w * 0.6), base_y - int(height * 0.5))
+        return self._bezier(left, c1, tip) + self._bezier(tip, c2, right)
+
     def draw(self, audio_data):
         screen = self.visualizer.get_screen()
+        self.screen = screen
         w, h = screen.get_size()
-        if (w, h) != self.last_size:
-            self._precalc_static()
+        if (w, h) != self.last_size or int(self.config["num_flames"]) != self._num:
+            self._precalc()
 
-        volume = min(self.audio_manager.get_volume(audio_data) / 32768, 1.0)
-        freq_data = self.audio_manager.get_frequency_data()
-        bass = np.mean(freq_data[:len(freq_data)//8]) if len(freq_data) > 0 else 0
-
-        # Efecto de parpadeo rojo cuando las llamas son azules (volumen alto)
-        if volume > 0.75:  # Reducido de 0.92 a 0.75 para mayor reactividad
-            # Parpadeo rápido basado en el tiempo
-            flash_time = pygame.time.get_ticks() * 0.015  # Velocidad del parpadeo
-            flash_intensity = (math.sin(flash_time) + 1) * 0.5  # Valor entre 0 y 1
-            flash_alpha = int(flash_intensity * 120 + 30)  # Alpha entre 30 y 150
-            
-            # Crear overlay rojo parpadeante
-            red_overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-            red_color = (255, 50, 50, flash_alpha)  # Rojo con alpha variable
-            red_overlay.fill(red_color)
-            screen.blit(red_overlay, (0, 0))
-            
-            # Overlay normal más tenue para no opacar el efecto rojo
-            overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 20))
-            screen.blit(overlay, (0, 0))
+        # --- Audio: volumen + bandas, suavizado ---
+        volume = min(self.audio_manager.get_volume(audio_data) / 32768.0, 1.0)
+        freq = self.audio_manager.get_frequency_data(audio_data)
+        if len(freq) > 0:
+            bass = min(1.0, float(np.mean(freq[:max(1, len(freq) // 8)])) / 20000.0)
+            treble = min(1.0, float(np.mean(freq[len(freq) // 2:])) / 8000.0)
         else:
-            # Overlay normal cuando no hay parpadeo
-            overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 36))
-            screen.blit(overlay, (0, 0))
+            bass = treble = 0.0
+        self.vol_s = self.vol_s * 0.8 + volume * 0.2
+        self.bass_s = self.bass_s * 0.7 + bass * 0.3
+        self.treble_s = self.treble_s * 0.6 + treble * 0.4
 
-        flame_width = w // (self.num_flames + 1)
-        t = pygame.time.get_ticks() * 0.002
-        base_y = h - 8
+        # Estela: oscurece un poco el frame anterior en vez de borrarlo
+        overlay = self.get_layer("fade", clear=False)
+        overlay.fill((0, 0, 0, 40))
+        screen.blit(overlay, (0, 0))
 
-        rand_offsets = [random.random() for _ in range(self.num_flames)]
-        rand_ints = [random.randint(0, 10) for _ in range(self.num_flames)]
+        cfg = self.config
+        t = pygame.time.get_ticks() * 0.001
+        base_y = h - 6
+        flame_w = w // (self._num + 1)
+        blue_hot = self.vol_s > 0.8  # llama azul cuando pega fuerte
 
-        bezier = self.bezier_curve
+        glow_layer = self.get_layer("glow")
+        glow_f = cfg["glow"] * (0.4 + 0.6 * self.vol_s)
 
-        for i, x in enumerate(self.base_positions):
-            base_height = (0.18 + 0.82 * volume) * h * (0.7 + 0.3 * np.sin(t + i * 0.7))
-            flame_height = int(base_height * (0.85 + 0.3 * rand_offsets[i]))
+        for i, x in enumerate(self.positions):
+            sway = math.sin(t * cfg["sway_speed"] + self.phases[i])
+            flick = 1.0 + 0.18 * cfg["flicker"] * self.treble_s * math.sin(t * 20 + i)
+            height = ((0.14 + 0.7 * self.vol_s + 0.5 * self.bass_s) * h
+                      * cfg["height"] * (0.78 + 0.22 * sway) * flick)
+            height = int(max(20, height))
+            half_w = max(6, int(flame_w * 0.5))
 
-            tip = (x, base_y - flame_height - rand_ints[i])
-            left_base = (x - flame_width // 2, base_y)
-            right_base = (x + flame_width // 2, base_y)
-            ctrl1 = (x - flame_width // 3, base_y - int(flame_height * 0.5))
-            ctrl2 = (x + flame_width // 3, base_y - int(flame_height * 0.5))
+            # Resplandor (llama ancha y tenue, aditiva)
+            g = int(90 * glow_f)
+            glow_col = (int(20 * glow_f), int(60 * glow_f), g) if blue_hot else (int(120 * glow_f), int(50 * glow_f), 0)
+            pygame.draw.polygon(glow_layer, glow_col,
+                                self._flame_poly(x, base_y, int(height * 1.05), int(half_w * 1.5)))
 
-            color_center = (80, 180, 255) if volume > 0.75 else (255, 255, 180)  # Reducido umbral para mayor reactividad
-            curve_left = bezier([left_base, ctrl1, tip], steps=8)
-            curve_right = bezier([tip, ctrl2, right_base], steps=8)
-            points = curve_left + curve_right
-            pygame.draw.polygon(screen, color_center, points)
+            # Cuerpo con degradado: exterior -> nucleo (poligonos anidados)
+            if blue_hot:
+                layers = [((20, 60, 200), 1.0, 1.0), ((80, 160, 255), 0.78, 0.6),
+                          ((180, 220, 255), 0.5, 0.32), ((255, 255, 255), 0.28, 0.16)]
+            else:
+                layers = [((200, 40, 10), 1.0, 1.0), ((255, 120, 20), 0.8, 0.62),
+                          ((255, 200, 60), 0.52, 0.34), ((255, 245, 200), 0.28, 0.16)]
+            for color, hs, ws in layers:
+                pygame.draw.polygon(screen, color,
+                                    self._flame_poly(x, base_y, int(height * hs), max(3, int(half_w * ws))))
 
-            # Lenguas secundarias
-            num_tongues = 2
-            tongue_rand_offsets = [random.random() for _ in range(num_tongues)]
-            tongue_rand_ints = [random.randint(0, 8) for _ in range(num_tongues)]
-            for j in range(num_tongues):
-                rel = (j + 1) / (num_tongues + 1)
-                tongue_height = int(flame_height * (0.5 + 0.4 * rel + 0.1 * tongue_rand_offsets[j]))
-                tongue_tip = (
-                    x + random.randint(-flame_width // 3, flame_width // 3),
-                    base_y - tongue_height - tongue_rand_ints[j]
-                )
-                tongue_left = (x - int(flame_width * 0.4 * (1 - rel)), base_y)
-                tongue_right = (x + int(flame_width * 0.4 * (1 - rel)), base_y)
-                ctrl1 = (tongue_left[0] + flame_width // 6, base_y - int(tongue_height * 0.5))
-                ctrl2 = (tongue_right[0] - flame_width // 6, base_y - int(tongue_height * 0.5))
+        screen.blit(glow_layer, (0, 0), special_flags=pygame.BLEND_ADD)
 
-                # Usa color precalculado
-                if volume > 0.75:  # Reducido umbral para mayor reactividad
-                    color = (80, 180, 255)
-                else:
-                    idx = min(int(rel * (len(self.precalc_colors) - 1)), len(self.precalc_colors) - 1)
-                    color = self.precalc_colors[idx]
-
-                tongue_curve_left = bezier([tongue_left, ctrl1, tongue_tip], steps=5)
-                tongue_curve_right = bezier([tongue_tip, ctrl2, tongue_right], steps=5)
-                tongue_points = tongue_curve_left + tongue_curve_right
-                pygame.draw.polygon(screen, color, tongue_points)
+    def on_screen_resize(self, width, height):
+        super().on_screen_resize(width, height)
+        self.screen = self.visualizer.get_screen()
+        self._precalc()

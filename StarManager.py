@@ -24,6 +24,10 @@ class StarManager:
         self.mid_intensity = 0.0
         self.treble_intensity = 0.0
 
+        # Deteccion de golpes para lanzar rafagas de estrellas
+        self.energy_history = []
+        self.last_beat_time = 0
+
         # Add 3 random gravity centers with different sizes
         for _ in range(3):
             x = random.randint(0, self.width)
@@ -81,6 +85,33 @@ class StarManager:
         self.draw_shooting_stars()
         self.particle_manager.move_particles(audio_data, volume)
     
+    def update_audio(self, audio_data, volume, audio_manager=None):
+        """Actualiza intensidades de audio y lanza rafagas de estrellas en los golpes."""
+        self.current_volume = volume
+        self.audio_intensity = min(1.0, volume / 32768.0) if volume > 0 else 0.0
+
+        self.bass_intensity = self.mid_intensity = self.treble_intensity = 0.0
+        if audio_manager:
+            freq = audio_manager.get_frequency_data(audio_data)
+            if len(freq) > 0:
+                bass_end = len(freq) // 6
+                mid_end = len(freq) // 2
+                self.bass_intensity = min(1.0, sum(freq[:bass_end]) / max(1, bass_end) / 16384.0)
+                self.mid_intensity = min(1.0, sum(freq[bass_end:mid_end]) / max(1, mid_end - bass_end) / 16384.0)
+                self.treble_intensity = min(1.0, sum(freq[mid_end:]) / max(1, len(freq) - mid_end) / 16384.0)
+
+        # Golpe = energia de graves muy por encima de su media reciente
+        self.energy_history.append(self.bass_intensity)
+        if len(self.energy_history) > 43:
+            self.energy_history.pop(0)
+        avg = sum(self.energy_history) / len(self.energy_history)
+        now = pygame.time.get_ticks()
+        if (self.bass_intensity > avg * 1.4 + 0.05
+                and now - self.last_beat_time > 140):
+            self.last_beat_time = now
+            for _ in range(3 + int(self.audio_intensity * 5)):
+                self.stars.append(self.create_star())
+
     def create_star(self):
         margin = 10
         side = random.randint(0, 3)  # Lado de la pantalla (0-3: arriba, derecha, abajo, izquierda)
@@ -141,90 +172,35 @@ class StarManager:
             pygame.draw.circle(self.screen, self.tone_to_color(), (int(x), int(y)), center['size_center'])
             pygame.draw.circle(self.screen, self.tone_to_color(), (int(x), int(y)), size, 1)
 
-    def draw_flame_trail(self, star, now, brightness, size, trail_len, color_offset):
-        """Dibuja el rastro de llamas de una estrella"""
+    def _draw_trail(self, layer, star, now, brightness, size, trail_len, color_offset):
+        """Dibuja el rastro de llama de una estrella sobre la capa aditiva."""
         for idx, (px, py) in enumerate(star['trail']):
-            fade = idx / trail_len
-            
-            # Crear efecto de parpadeo/flicker como fuego real
-            flicker = 0.8 + 0.2 * math.sin(now * 8 + idx * 0.3)
-            
-            # Color de fuego que cambia con el audio
+            fade = (idx + 1) / trail_len
+            flicker = 0.85 + 0.15 * math.sin(now * 8 + idx * 0.3)
             color = self.get_fire_color(brightness, fade * flicker, color_offset)
-            alpha = int(255 * (fade * 0.6 + 0.3) * flicker)  # Alpha con parpadeo
-            alpha = max(0, min(255, alpha))  # Validar alpha
-            
-            # Múltiples capas para efecto de fuego más realista
-            flame_size = max(1, int(size * (0.8 + fade * 0.7) * (1 + self.audio_intensity * 0.5)))
-            
-            # Capa externa (más difusa)
-            outer_surface = pygame.Surface((flame_size*6, flame_size*6), pygame.SRCALPHA)
-            outer_color = tuple(int(c * 0.6) for c in color)  # Color más tenue
-            pygame.draw.circle(outer_surface, outer_color, 
-                             (flame_size*3, flame_size*3), flame_size*2)
-            outer_surface.set_alpha(alpha//3)
-            self.screen.blit(outer_surface, (px - flame_size*3, py - flame_size*3), 
-                           special_flags=pygame.BLEND_ADD)
-            
-            # Capa interna (más intensa)
-            inner_surface = pygame.Surface((flame_size*4, flame_size*4), pygame.SRCALPHA)
-            pygame.draw.circle(inner_surface, color, 
-                             (flame_size*2, flame_size*2), flame_size)
-            inner_surface.set_alpha(alpha)
-            self.screen.blit(inner_surface, (px - flame_size*2, py - flame_size*2), 
-                           special_flags=pygame.BLEND_ADD)
-    
-    def draw_flame_core(self, x, y, size, brightness, now, color_offset):
-        """Dibuja el núcleo central de la llama"""
-        # Pulsación basada en el audio
-        pulse = 1.0 + self.audio_intensity * 0.3 + 0.1 * math.sin(now * 6)
-        
-        # Color del núcleo más intenso
+            radius = max(1, int(size * (0.5 + fade * 1.3) * (1 + self.audio_intensity * 0.6)))
+            pygame.draw.circle(layer, color, (int(px), int(py)), radius)
+
+    def _draw_core(self, layer, x, y, size, brightness, color_offset):
+        """Dibuja el nucleo brillante de la estrella sobre la capa aditiva."""
         core_color = self.get_fire_color(brightness, 1.0, color_offset)
-        
-        # Halo exterior (resplandor de la llama)
-        halo_size = max(1, int(size * 4 * pulse))
-        halo_surface = pygame.Surface((halo_size*2, halo_size*2), pygame.SRCALPHA)
-        
-        # Gradiente de resplandor (más difuso hacia afuera)
-        for i in range(3, 0, -1):
-            halo_radius = max(1, int(halo_size * (i * 0.4)))
-            halo_color = tuple(max(0, min(255, int(c * (0.5 + i * 0.2)))) for c in core_color)
-            
-            # Dibujar círculo sin alpha en el color
-            pygame.draw.circle(halo_surface, halo_color, 
-                             (halo_size, halo_size), halo_radius)
-        
-        # Aplicar alpha a toda la superficie
-        halo_surface.set_alpha(60)
-        self.screen.blit(halo_surface, (x - halo_size, y - halo_size), 
-                       special_flags=pygame.BLEND_ADD)
-        
-        # Núcleo central brillante
-        core_size = max(1, int(size * 1.2 * pulse))
-        core_surface = pygame.Surface((core_size*4, core_size*4), pygame.SRCALPHA)
-        
-        # Centro blanco-amarillo muy brillante (corazón de la llama)
-        white_core = (255, 255, 200) if self.audio_intensity < 0.6 else (200, 230, 255)
-        pygame.draw.circle(core_surface, white_core, 
-                         (core_size*2, core_size*2), max(1, int(core_size * 0.5)))
-        
-        # Anillo de color de fuego alrededor
-        pygame.draw.circle(core_surface, core_color, 
-                         (core_size*2, core_size*2), core_size, 2)
-        
-        # Aplicar transparencia al núcleo
-        core_surface.set_alpha(200)
-        self.screen.blit(core_surface, (x - core_size*2, y - core_size*2), 
-                       special_flags=pygame.BLEND_ADD)
+        r = max(2, int(size * (1.0 + self.audio_intensity * 0.6)))
+        pygame.draw.circle(layer, tuple(int(c * 0.4) for c in core_color), (x, y), r * 2)
+        pygame.draw.circle(layer, core_color, (x, y), r)
+        white_core = (255, 255, 220) if self.audio_intensity < 0.6 else (210, 235, 255)
+        pygame.draw.circle(layer, white_core, (x, y), max(1, r // 2))
 
     def draw_shooting_stars(self):
+        w, h = self.width, self.height
+        # Superficie aditiva reutilizada entre frames (mejor para Raspberry Pi)
+        layer = getattr(self, "_layer", None)
+        if layer is None or layer.get_size() != (w, h):
+            self._layer = pygame.Surface((w, h), pygame.SRCALPHA)
+            layer = self._layer
+        else:
+            layer.fill((0, 0, 0, 0))
+        now = pygame.time.get_ticks() / 1000.0
         new_stars = []
-
-        if self.gravity_centers:
-            self.draw_gravity_centers()
-
-        now = pygame.time.get_ticks() / 1000.0  # Tiempo en segundos
 
         for star in self.stars:
             x = int(star['x'])
@@ -232,45 +208,39 @@ class StarManager:
             brightness = star['brightness']
             size = star['size']
 
-            # --- Actualizar rastro de llamas ---
-            trail_len = 25 + int(self.audio_intensity * 15)  # Rastro más largo con sonido alto
+            trail_len = 18 + int(self.audio_intensity * 22)
             star['trail'].append((x, y))
             if len(star['trail']) > trail_len:
                 star['trail'].pop(0)
-
-            # Cada llama tiene un desfase de color para variación
             color_offset = (now * 0.15 + size * 0.05) % 1.0
 
-            # Dibujar rastro de llamas
-            self.draw_flame_trail(star, now, brightness, size, trail_len, color_offset)
-            
-            # Dibujar núcleo de llama
-            self.draw_flame_core(x, y, size, brightness, now, color_offset)
+            self._draw_trail(layer, star, now, brightness, size, len(star['trail']), color_offset)
+            self._draw_core(layer, x, y, size, brightness, color_offset)
 
-            # Movimiento y física
+            # Movimiento: velocidad propia de la estrella + atraccion de gravedad
             angle = star['angle']
-            dx = math.cos(angle) * self.star_speed
-            dy = math.sin(angle) * self.star_speed
-
+            speed = star.get('speed', self.star_speed)
+            dx = math.cos(angle) * speed
+            dy = math.sin(angle) * speed
             for center in self.gravity_centers:
-                gx, gy, _ = center['x'], center['y'], center['size']
-                dx_center = gx - x
-                dy_center = gy - y
-                distance_center = math.sqrt(dx_center ** 2 + dy_center ** 2)
-                if distance_center > 0:
-                    gravity_direction = math.atan2(dy_center, dx_center)
-                    gravity_force = self.gravity_strength / distance_center
-                    dx += math.cos(gravity_direction) * gravity_force
-                    dy += math.sin(gravity_direction) * gravity_force
+                ddx = center['x'] - x
+                ddy = center['y'] - y
+                dist = math.hypot(ddx, ddy)
+                if dist > 0:
+                    force = self.gravity_strength / dist
+                    gdir = math.atan2(ddy, ddx)
+                    dx += math.cos(gdir) * force
+                    dy += math.sin(gdir) * force
 
             star['x'] += dx
             star['y'] += dy
-            self.change_star_direction(star, math.atan2(dy, dx))
+            star['angle'] = math.atan2(dy, dx)
 
-            if 0 <= x <= self.width and 0 <= y <= self.height:
+            if -20 <= star['x'] <= w + 20 and -20 <= star['y'] <= h + 20:
                 new_stars.append(star)
 
         self.stars[:] = new_stars
+        self.screen.blit(layer, (0, 0), special_flags=pygame.BLEND_ADD)
 
     def get_fire_color(self, brightness=255, fade=1.0, color_offset=0.0):
         """Genera colores de fuego que cambian según graves, medios y agudos"""

@@ -19,9 +19,12 @@ class ShootingStars(Effect):
             )
         
     def draw(self, audio_data):
-        self.star_manager.draw_shooting_stars()
+        volume = self.visualizer.audioManager.get_volume(audio_data)
+        # Alimenta las bandas de audio (antes nunca se llamaba -> no reaccionaba)
+        self.star_manager.update_audio(audio_data, volume, self.visualizer.audioManager)
         self.star_manager.update_stars()
         self.star_manager.update_gravity_centers()
+        self.star_manager.draw_shooting_stars()
         
     def on_screen_resize(self, width, height):
         self.star_manager.width = width

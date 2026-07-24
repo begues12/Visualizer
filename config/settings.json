@@ -1,0 +1,31 @@
+{
+    "mode": "static",
+    "duration": 15000.0,
+    "sensitivity": 5.0,
+    "current": "Shockwave",
+    "active": [
+        "Spectrum Wave",
+        "Audio Flames",
+        "Shooting Stars",
+        "Energy Orb",
+        "Background Color",
+        "Dark Spectrum",
+        "Circular Weave",
+        "Color Matrix Rain",
+        "Techno Orbs",
+        "Lightning Strike",
+        "Aurora Bars",
+        "Kaleidoscope",
+        "Fluid Frequency"
+    ],
+    "particles": {
+        "max": 50,
+        "speed": 9.6,
+        "size": 100.0
+    },
+    "device": 2,
+    "resolution": [
+        960,
+        540
+    ]
+}

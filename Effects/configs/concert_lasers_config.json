@@ -1,0 +1,10 @@
+{
+    "emitters": 4,
+    "beams": 12,
+    "spread": 130,
+    "sweep_range": 45,
+    "sweep_speed": 3.4,
+    "beam_width": 1,
+    "glow": 2.4,
+    "sensitivity": 2.45
+}

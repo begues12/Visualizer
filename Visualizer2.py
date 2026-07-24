@@ -24,6 +24,9 @@ from Effects.lightning_strike import LightningStrike
 from Effects.aurora_bars import AuroraBars
 from Effects.kaleidoscope import Kaleidoscope
 from Effects.character import FluidFrequencyVisualizer
+from Effects.shockwave import Shockwave
+from Effects.laser_storm import LaserStorm
+from Effects.concert_lasers import ConcertLasers
 import signal
 import sys
 import inspect
